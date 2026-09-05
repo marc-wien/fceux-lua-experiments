@@ -41,9 +41,9 @@ plt.plot(B_L.Frame, B_L.Px, label="X Pos: Hold Right+B", color="black")
 plt.plot(RTA.Frame, RTA.Px, label="X Pos: TAS (RTA)", color="tab:orange")
 plt.plot(TAS.Frame, TAS.Px, label="X Pos: TAS (L+R)", color="tab:green")
 
-plt.plot(B_L.Frame, B_L.VxEmp, label="X Vel (Scaled): Hold Right+B", color="black", marker='.', markersize=4)
-plt.plot(RTA.Frame, RTA.VxEmp, label="X Vel (Scaled): TAS (RTA)", color="tab:orange", marker='.', markersize=4)
-plt.plot(TAS.Frame, TAS.VxEmp, label="X Vel (Scaled): TAS (L+R)", color="tab:green", marker='.', markersize=4)
+plt.plot(B_L.Frame, B_L.Vx.clip(upper=40), label="X Vel (Scaled): Hold Right+B", color="black", marker='.', markersize=4)
+plt.plot(RTA.Frame, RTA.Vx.clip(upper=40), label="X Vel (Scaled): TAS (RTA)", color="tab:orange", marker='.', markersize=4)
+plt.plot(TAS.Frame, TAS.Vx.clip(upper=40), label="X Vel (Scaled): TAS (L+R)", color="tab:green", marker='.', markersize=4)
 
 # plt.plot(TAS.Frame, TAS.Ax * 10 - 25, label="X Acc: TAS", color='tab:green', linestyle=':')
 # plt.plot(RTA.Frame, RTA.Ax * 10 - 25, label="X Acc: RTA", color='tab:orange', linestyle=':')
