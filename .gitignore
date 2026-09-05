@@ -1,3 +1,6 @@
+# General
+*.lnk
+
 # Compiled Lua sources
 luac.out
 
