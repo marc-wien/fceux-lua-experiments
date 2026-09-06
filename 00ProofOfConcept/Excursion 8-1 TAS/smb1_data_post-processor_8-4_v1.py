@@ -8,7 +8,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Load CSVs
-TAS = pd.read_csv("data_log_v1_HappyLee8-1.csv")
+TAS = pd.read_csv("data_log_v1_HappyLee8-4.csv")
 
 
 # Filter table
@@ -34,7 +34,7 @@ plt.plot(
 plt.plot(
     TAS.Frame,
     TAS.Vx.clip(upper=TAS.VxEmp.max()),
-    label="X Vel (x16): Fast Accel (L+R)",
+    label="X Vel (x16): TAS Accel (L+R)",
     color="tab:green",
     marker=".",
     linewidth=0.8,
@@ -43,7 +43,7 @@ plt.plot(
 
 
 # Format plot
-plt.title("Start of 8-1, Initial Player Acceleration")
+plt.title("Start of 8-4, Initial Player Acceleration")
 plt.xlabel("Frame #")
 plt.ylabel("X Pos, Vel")
 plt.legend()
@@ -51,7 +51,7 @@ plt.legend(fontsize=8)
 plt.grid(color="#dfdfdf")
 
 # Save
-plt.savefig("Output_Plot_8-1.png")
+plt.savefig("Output_Plot_8-4.png")
 
 plt.show()
 
