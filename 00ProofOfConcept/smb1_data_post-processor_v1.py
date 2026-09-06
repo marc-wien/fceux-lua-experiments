@@ -123,7 +123,7 @@ plt.legend(fontsize=8)
 plt.grid(color="#dfdfdf")
 
 # Save
-plt.savefig("Output Plot.png")
+plt.savefig("Output_Plot.png")
 
 plt.show()
 
