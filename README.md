@@ -1,5 +1,5 @@
 # fceux-lua-experiments
-Experiments with Lua scripting in FCEUX 2.6.6
+Experiments with Lua scripting in FCEUX 2.6.6 for TASing Super Mario Bros. on NES
 
 ## Usage:
 - Proof-of-concept steps: open ROM, load FM2 into TAS Editor, start Lua script, start TAS, pause TAS, stop Lua script, examine/process CSV
