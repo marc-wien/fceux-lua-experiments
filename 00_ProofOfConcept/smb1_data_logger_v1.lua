@@ -44,7 +44,7 @@ local GYM_STATUS_VALUE          = 0x756 --https://github.com/Kautenja/gym-super-
 --Start CSV writer
 local file = assert(io.open("my_data_log.csv", "w"), "Could not open CSV for writing!")
 
-file:write(string.format("Frame,Input,Lag,Px,Vx,Ax,"))
+file:write("Frame,Input,Lag,Px,Vx,Ax,")
 file:write("\n")
 
 --Register "on-close" callback
