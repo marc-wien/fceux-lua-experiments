@@ -128,12 +128,11 @@ while true do
 	
 	--Joypad inputs
 	local input = joypad.getdown(1)
-	local inputString = get_input_string(input)
-	file:write(inputString)
+	local input_string = get_input_string(input)
+	file:write(input_string)
 	file:write(",")
 	
 	--Lag
-	--Sampled at the same point as the other per-frame data, immediately before frame-advance.
 	file:write(string.format("%d,", emu.lagged() and 1 or 0))
 	
 	--X position
