@@ -7,4 +7,4 @@
 
 **Data Visualization:**
 
-![Plot of X-Position and X-Velocity vs. Frame # from collected data](Output Plot.png?raw=true)
+![Plot of X-Position and X-Velocity vs. Frame # from collected data]("Output Plot.png?raw=true")
