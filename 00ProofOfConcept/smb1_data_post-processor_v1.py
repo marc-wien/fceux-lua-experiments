@@ -47,10 +47,35 @@ SLO["VxEmp"] = SLO.Px.diff() * 16
 # Plot
 plt.figure(dpi=300)
 
-plt.plot(SLO.Frame, SLO.Px, label="X Pos: Walking", color="black", linestyle="--")
-plt.plot(B_L.Frame, B_L.Px, label="X Pos: Running", color="black")
-plt.plot(RTA.Frame, RTA.Px, label="X Pos: Fast Accel (RTA)", color="tab:orange")
-plt.plot(TAS.Frame, TAS.Px, label="X Pos: Fast Accel (L+R)", color="tab:green")
+plt.plot(
+    SLO.Frame,
+    SLO.Px,
+    label="X Pos: Walking",
+    color="black",
+    linestyle="--",
+    linewidth=1.2,
+)
+plt.plot(
+    B_L.Frame,
+    B_L.Px,
+    label="X Pos: Running",
+    color="black",
+    linewidth=1.2,
+)
+plt.plot(
+    RTA.Frame,
+    RTA.Px,
+    label="X Pos: Fast Accel (RTA)",
+    color="tab:orange",
+    linewidth=1.2,
+)
+plt.plot(
+    TAS.Frame,
+    TAS.Px,
+    label="X Pos: Fast Accel (L+R)",
+    color="tab:green",
+    linewidth=1.2,
+)
 
 plt.plot(
     SLO.Frame,
@@ -58,6 +83,7 @@ plt.plot(
     label="X Vel (x16): Walking",
     color="black",
     linestyle=":",
+    linewidth=1.1,
 )
 plt.plot(
     B_L.Frame,
@@ -65,7 +91,8 @@ plt.plot(
     label="X Vel (x16): Running",
     color="black",
     marker=".",
-    markersize=4,
+    linewidth=0.8,
+    markersize=3,
 )
 plt.plot(
     RTA.Frame,
@@ -73,7 +100,8 @@ plt.plot(
     label="X Vel (x16): Fast Accel (RTA)",
     color="tab:orange",
     marker=".",
-    markersize=4,
+    linewidth=0.8,
+    markersize=3,
 )
 plt.plot(
     TAS.Frame,
@@ -81,17 +109,18 @@ plt.plot(
     label="X Vel (x16): Fast Accel (L+R)",
     color="tab:green",
     marker=".",
-    markersize=4,
+    linewidth=0.8,
+    markersize=3,
 )
 
 
 # Format plot
 plt.title("Start of 1-1, Initial Player Acceleration")
 plt.xlabel("Frame #")
-plt.ylabel("X Pos/Vel")
+plt.ylabel("X Pos, Vel")
 plt.legend()
 plt.legend(fontsize=8)
-plt.grid()
+plt.grid(color="#dfdfdf")
 
 # Save
 plt.savefig("data_comparison_v1.png")
