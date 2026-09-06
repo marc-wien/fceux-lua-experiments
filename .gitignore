@@ -1,6 +1,6 @@
 # General
 *.lnk
-*_old/*
+_old/
 
 # Compiled Lua sources
 luac.out
