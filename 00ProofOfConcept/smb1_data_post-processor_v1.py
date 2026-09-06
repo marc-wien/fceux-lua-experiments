@@ -10,8 +10,8 @@ import matplotlib.pyplot as plt
 # Load CSVs
 TAS = pd.read_csv("data/data_log_v1_HappyLeeTAS.csv")
 RTA = pd.read_csv("data/data_log_v1_MaruRTA.csv")
-B_L = pd.read_csv("data/data_log_v1_HoldRightAndB.csv")
-SLO = pd.read_csv("data/data_log_v1_HoldRightWalking.csv")
+B_L = pd.read_csv("data/data_log_v1_HoldRightAndB.csv")  # Can change "Right" to "Left"
+SLO = pd.read_csv("data/data_log_v1_HoldRightWalking.csv")  # Can change "Right" to "Left"
 
 
 # Filter table
@@ -30,6 +30,7 @@ RTA = RTA.loc[RTA.Frame <= 256]
 B_L = B_L.loc[B_L.Frame <= 256]
 SLO = SLO.loc[SLO.Frame <= 256]
 
+
 # Check for assumed alignment
 assert (
     (TAS.iloc[0].Frame == RTA.iloc[0].Frame)
@@ -38,8 +39,8 @@ assert (
 )
 
 # Calculate and scale empirical derivative of x position
-RTA["VxEmp"] = RTA.Px.diff() * 16
 TAS["VxEmp"] = TAS.Px.diff() * 16
+RTA["VxEmp"] = RTA.Px.diff() * 16
 B_L["VxEmp"] = B_L.Px.diff() * 16
 SLO["VxEmp"] = SLO.Px.diff() * 16
 
