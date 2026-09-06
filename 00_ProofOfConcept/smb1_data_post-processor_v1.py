@@ -116,7 +116,7 @@ plt.plot(
 
 
 # Format plot
-plt.title("Start of 1-1, Initial Player Acceleration")
+plt.title("Start of 1-1, Initial Player Accelerations")
 plt.xlabel("Frame #")
 plt.ylabel("X Pos, Vel")
 plt.legend()
