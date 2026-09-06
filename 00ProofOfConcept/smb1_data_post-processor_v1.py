@@ -8,10 +8,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Load CSVs
-TAS = pd.read_csv("data_log_v1_HappyLeeTAS.csv")
-RTA = pd.read_csv("data_log_v1_MaruRTA.csv")
-B_L = pd.read_csv("data_log_v1_HoldRightAndB.csv")
-SLO = pd.read_csv("data_log_v1_HoldRightWalking.csv")
+TAS = pd.read_csv("data/data_log_v1_HappyLeeTAS.csv")
+RTA = pd.read_csv("data/data_log_v1_MaruRTA.csv")
+B_L = pd.read_csv("data/data_log_v1_HoldRightAndB.csv")
+SLO = pd.read_csv("data/data_log_v1_HoldRightWalking.csv")
 
 
 # Filter table
@@ -123,7 +123,7 @@ plt.legend(fontsize=8)
 plt.grid(color="#dfdfdf")
 
 # Save
-plt.savefig("data_comparison_v1.png")
+plt.savefig("Output Plot.png")
 
 plt.show()
 
