@@ -46,7 +46,7 @@ SLO["VxEmp"] = SLO.Px.diff() * 16
 
 
 # Plot
-plt.figure(dpi=300)
+plt.figure(dpi=600)
 
 plt.plot(
     SLO.Frame,

@@ -193,21 +193,33 @@ plt.plot(
 plt.plot(
     TAS.Frame,
     TAS.InAir - 9,
-    label="Is In Air: Fast Accel (L+R)",
+    label="In Air: Fast Accel (L+R)",
     color="tab:green",
     marker="s",
     linewidth=0.8,
     markersize=3,
 )
+# plt.plot(
+#     TAS.Frame,
+#     (TAS.YPos.iloc[0] - TAS.YPos) * 0.2 - 9 - 1,
+#     color="darkblue",
+#     linewidth=0.8,
+# )
 plt.plot(
     RTA.Frame,
     RTA.InAir - 15,
-    label="Is In Air: Fast Accel (RTA)",
+    label="In Air: Fast Accel (RTA)",
     color="tab:orange",
     marker="s",
     linewidth=0.8,
     markersize=3,
 )
+# plt.plot(
+#     RTA.Frame,
+#     (RTA.YPos.iloc[0] - RTA.YPos) * 0.2 - 15 - 1,
+#     color="darkblue",
+#     linewidth=0.8,
+# )
 
 
 # Button Presses
