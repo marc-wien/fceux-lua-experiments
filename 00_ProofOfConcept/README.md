@@ -5,7 +5,7 @@
 - Running: Accelerates to max speed of `40/16 pixels/frame` at `228/4096 pixels/frame^2`
 - Walking: Accelerates to max speed of `24/16 pixels/frame` at `152/4096 pixels/frame^2`
 
-**Data Visualization (\*\*\*CONTAINS ERROR WHEN NEGATIVE VELOCITY\*\*\*):**
+**Data Visualization (\*\*\*THIS VERSION CONTAINS NOSWEAR-STYLE NEGATIVE VELOCITY SUBSPEED PROCESSING\*\*\*):**
 
 ![Plot of X-Position and X-Velocity vs. Frame # from collected data](Output_Plot.png?raw=true)
 Caveat: Position and Velocity curves here incorporate accumulator values for visual smoothness
