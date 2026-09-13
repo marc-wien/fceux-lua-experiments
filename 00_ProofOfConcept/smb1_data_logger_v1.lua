@@ -23,6 +23,7 @@ local ram_Player_X_Speed        = 0x057  --X velocity
 local ram_Player_X_MoveForce    = 0x705
 local ram_FrictionAdderLow      = 0x702  --X acceleration
 
+local ram_YPage                 = 0x0B5  --https://www.speedrun.com/smb1/forums/n59i1
 local ram_SprObject_Y_Position  = 0x0CE  --Y position
 local ram_SprObject_YMF_Dummy   = 0x416
 local ram_Player_Y_Speed        = 0x09F  --Y velocity
