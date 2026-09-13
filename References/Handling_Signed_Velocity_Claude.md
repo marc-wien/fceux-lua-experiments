@@ -52,14 +52,16 @@ local function get_xvel_smooth()
 	local xvel1 = memory.readbytesigned(ram_Player_X_Speed)
 	local xvel2 = memory.readbyte(ram_Player_X_MoveForce)  -- unsigned, no correction
 	local xvel = xvel1 + xvel2/256
-	if xvel > 40 then xvel = 40
-	elseif xvel < -40 then xvel = -40 end
 	return xvel
 end
 ```
 
 Same change applies to `get_yvel_smooth` (`Player_Y_Speed`/`Player_Y_MoveForce`).
 
+## Source
 
+https://claude.ai/share/91733d95-12e5-46f5-b120-e794083eb3ab
 
-Source: https://claude.ai/share/91733d95-12e5-46f5-b120-e794083eb3ab
+References:
+- https://github.com/TheNoSwearGuy/smb.lua-and-smas-smb.lua/blob/main/Default/smb%20(FCEUX).lua
+- https://simplistic6502.github.io/smb1_tll/smbpedia_movement.html
