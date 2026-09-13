@@ -54,8 +54,34 @@ RTA["InAir"] = RTA.PlayerState
 RTA.loc[RTA.InAir == 0, "InAir"] = float("nan")
 
 
+# Handle inputs for RTA
+RTA["APress"] = RTA.Input.str.contains("A").astype(float)
+RTA["BPress"] = RTA.Input.str.contains("B").astype(float)
+RTA["LPress"] = RTA.Input.str.contains("L").astype(float)
+RTA["RPress"] = RTA.Input.str.contains("R").astype(float)
+
+RTA.loc[RTA.APress == 0, "APress"] = float("nan")
+RTA.loc[RTA.BPress == 0, "BPress"] = float("nan")
+RTA.loc[RTA.LPress == 0, "LPress"] = float("nan")
+RTA.loc[RTA.RPress == 0, "RPress"] = float("nan")
+
+TAS["APress"] = TAS.Input.str.contains("A").astype(float)
+TAS["BPress"] = TAS.Input.str.contains("B").astype(float)
+TAS["LPress"] = TAS.Input.str.contains("L").astype(float)
+TAS["RPress"] = TAS.Input.str.contains("R").astype(float)
+
+TAS.loc[TAS.APress == 0, "APress"] = float("nan")
+TAS.loc[TAS.BPress == 0, "BPress"] = float("nan")
+TAS.loc[TAS.LPress == 0, "LPress"] = float("nan")
+TAS.loc[TAS.RPress == 0, "RPress"] = float("nan")
+
+
 # Plot
 plt.figure(dpi=600)
+
+# Reference lines
+plt.plot([0, 300], [0, 0], color="dimgray", linewidth=0.75)
+plt.plot([0, 300], [25, 25], color="lightgray", linestyle="--", linewidth=0.5)
 
 # Position
 plt.plot(
@@ -127,32 +153,107 @@ plt.plot(
 
 # Player State
 plt.plot(
-    RTA.Frame,
-    RTA.InAir - 10,
-    label="In Air: Fast Accel (RTA)",
-    color="tab:orange",
-    marker="s",
-    linewidth=0.8,
-    markersize=3,
-)
-plt.plot(
     TAS.Frame,
-    TAS.InAir - 14,
-    label="In Air: Fast Accel (L+R)",
+    TAS.InAir - 9,
+    label="Is In Air: Fast Accel (L+R)",
     color="tab:green",
     marker="s",
     linewidth=0.8,
     markersize=3,
 )
+plt.plot(
+    RTA.Frame,
+    RTA.InAir - 15,
+    label="Is In Air: Fast Accel (RTA)",
+    color="tab:orange",
+    marker="s",
+    linewidth=0.8,
+    markersize=3,
+)
+
+# Button Presses
+plt.text(193.25, -22.2, "Input:", fontsize=5)
+
+# Button Presses TAS
+plt.plot(
+    TAS.Frame,
+    TAS.APress - 20 - 0,
+    color="tab:green",
+    marker=".",
+    linestyle="none",
+    markersize=1,
+)
+plt.plot(
+    TAS.Frame,
+    TAS.BPress - 20 - 1,
+    color="tab:green",
+    marker=".",
+    linestyle="none",
+    markersize=0.5,
+)
+plt.plot(
+    TAS.Frame,
+    TAS.RPress - 20 - 2,
+    color="tab:green",
+    marker=">",
+    linestyle="none",
+    markersize=0.5,
+)
+plt.plot(
+    TAS.Frame,
+    TAS.LPress - 20 - 3,
+    color="tab:green",
+    marker="<",
+    linestyle="none",
+    markersize=0.5,
+)
+
+# Button Presses RTA
+plt.plot(
+    RTA.Frame,
+    RTA.APress - 26 - 0,
+    color="tab:orange",
+    marker=".",
+    linestyle="none",
+    markersize=1,
+)
+plt.plot(
+    RTA.Frame,
+    RTA.BPress - 26 - 1,
+    color="tab:orange",
+    marker=".",
+    linestyle="none",
+    markersize=0.5,
+)
+plt.plot(
+    RTA.Frame,
+    RTA.RPress - 26 - 2,
+    color="tab:orange",
+    marker=">",
+    linestyle="none",
+    markersize=0.5,
+)
+plt.plot(
+    RTA.Frame,
+    RTA.LPress - 26 - 3,
+    color="tab:orange",
+    marker="<",
+    linestyle="none",
+    markersize=0.5,
+)
 
 
 # Format plot
-plt.title("Start of 1-1, Initial Player Accelerations")
+plt.title("Start of 1-1, Initial Player Accelerations (For Smooth Visual Only)")
 plt.xlabel("Frame #")
-plt.ylabel("X Pos, Vel")
+plt.ylabel("X Value")
 plt.legend()
 plt.legend(fontsize=7)
 plt.grid(color="#dfdfdf")
+
+plt.xlim((193, 258))
+plt.ylim((-30, 160))
+plt.yticks(range(0, 180, 20))
 
 # Save
 plt.savefig("Output_Plot.png")
