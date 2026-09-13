@@ -6,5 +6,5 @@ Experiments with Lua scripting in FCEUX 2.6.6 for TASing Super Mario Bros. on NE
 - Data collected using `Super Mario Bros. (W) [!].nes`
 
 ## Snapshot of Progress:
-![Plot of X-Position and X-Velocity vs. Frame # from collected data](01_CollectKeyTasData/Output_Plot.png?raw=true)
+![Plot of X-Position and X-Velocity vs. Frame # from collected data](01_CollectKeyTasData/Output_Plot_Smooth.png?raw=true)
 Caveat: Position and Velocity curves here incorporate accumulator values for visual smoothness
