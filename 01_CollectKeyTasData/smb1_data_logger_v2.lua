@@ -132,7 +132,7 @@ local function get_xvel_smooth()
 	
 	local xvel = xvel1 + xvel2/256
 	
-	if xvel > 40 then  --Process "hard cap" on max running speed
+	if xvel > 40 then  --Apply hardcoded "hard cap" on max possible speed
 		xvel = 40
 	elseif xvel < -40 then
 		xvel = -40
