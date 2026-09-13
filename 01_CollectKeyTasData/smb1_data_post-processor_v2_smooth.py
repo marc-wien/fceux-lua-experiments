@@ -79,9 +79,13 @@ TAS.loc[TAS.RPress == 0, "RPress"] = float("nan")
 # Plot
 plt.figure(dpi=600)
 
+
 # Reference lines
 plt.plot([0, 300], [0, 0], color="dimgray", linewidth=0.75)
-plt.plot([0, 300], [25, 25], color="lightgray", linestyle="--", linewidth=0.5)
+
+# # https://gist.github.com/1wErt3r/4048722#file-smbdis-asm-L6144
+# plt.plot([0, 300], [25, 25], color="lightgray", linestyle="--", linewidth=0.5)
+
 
 # Position
 plt.plot(
@@ -113,6 +117,7 @@ plt.plot(
     color="tab:green",
     linewidth=1.2,
 )
+
 
 # Velocity
 plt.plot(
@@ -151,6 +156,7 @@ plt.plot(
     markersize=3,
 )
 
+
 # Player State
 plt.plot(
     TAS.Frame,
@@ -171,8 +177,10 @@ plt.plot(
     markersize=3,
 )
 
+
 # Button Presses
 plt.text(193.25, -22.2, "Input:", fontsize=5)
+
 
 # Button Presses TAS
 plt.plot(
@@ -207,6 +215,7 @@ plt.plot(
     linestyle="none",
     markersize=0.5,
 )
+
 
 # Button Presses RTA
 plt.plot(
@@ -254,6 +263,7 @@ plt.grid(color="#dfdfdf")
 plt.xlim((193, 258))
 plt.ylim((-30, 160))
 plt.yticks(range(0, 180, 20))
+
 
 # Save
 plt.savefig("Output_Plot_Smooth.png")
