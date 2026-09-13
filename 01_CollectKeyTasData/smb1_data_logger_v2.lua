@@ -52,7 +52,8 @@ local GYM_PLAYERSTATUS          = 0x756  --https://github.com/Kautenja/gym-super
 --Start CSV writer
 local file = assert(io.open("my_data_log.csv", "w"), "Could not open CSV for writing!")
 
-file:write("Frame,LagCount,LagFrame,Input,Px,PxSmooth,Vx,VxSmooth,Ax,")
+file:write("Frame,LagCount,LagFrame,Input,XPos,XPosSmooth,XVel,XVelSmooth,XAcc,YPos,YVel,YVelSmooth,YAcc,")
+file:write("MoveDirByte,XSpeedByte,YPageByte,PlayerState,PlayerControl,PlayerStatus,")
 file:write("\n")
 
 
@@ -126,9 +127,10 @@ local function get_xvel_smooth()
 	local xvel1 = memory.readbytesigned(ram_Player_X_Speed)
 	local xvel2 = memory.readbyte(ram_Player_X_MoveForce)
 	
-	if xvel1 < 0 then  --Process subspeed byte to add to X velocity
-		xvel2 = -AND(256 - xvel2, 0xFF)
-	end
+	--This logic is wrong for this application, per https://claude.ai/share/91733d95-12e5-46f5-b120-e794083eb3ab
+	--if xvel1 < 0 then  --Process subspeed byte to add to X velocity
+	--	xvel2 = -AND(256 - xvel2, 0xFF)
+	--end
 	
 	local xvel = xvel1 + xvel2/256
 	
@@ -180,9 +182,10 @@ local function get_yvel_smooth()
 	local yvel1 = memory.readbytesigned(ram_Player_Y_Speed)
 	local yvel2 = memory.readbyte(ram_Player_Y_MoveForce)
 	
-	if yvel1 < 0 then  --Process subspeed byte to add to Y velocity
-		yvel2 = -AND(256 - yvel2, 0xFF)
-	end
+	--This logic is wrong for this application, per https://claude.ai/share/91733d95-12e5-46f5-b120-e794083eb3ab
+	--if yvel1 < 0 then  --Process subspeed byte to add to Y velocity
+	--	yvel2 = -AND(256 - yvel2, 0xFF)
+	--end
 	
 	local yvel = yvel1 + yvel2/256
 	
@@ -228,6 +231,8 @@ while true do
 	file:write(get_joypad_string(buttons_down))
 	file:write(",")
 	
+	-- X DATA --
+	
 	--X position
 	local xpos = get_xpos()
 	file:write(string.format("%.9f,", xpos))
@@ -245,6 +250,33 @@ while true do
 	--X acceleration
 	local xacc = get_xacc()
 	file:write(string.format("%.9f,", xacc))
+	
+	-- Y DATA --
+	
+	--Y position
+	local ypos = get_ypos()
+	file:write(string.format("%.9f,", ypos))
+	
+	--Y velocity
+	local yvel = get_yvel()
+	file:write(string.format("%.9f,", yvel))
+	
+	local yvel_smooth = get_yvel_smooth()
+	file:write(string.format("%.9f,", yvel_smooth))
+	
+	--Y acceleration
+	local yacc = get_yacc()
+	file:write(string.format("%.9f,", yacc))
+	
+	-- DIAGNOSTICS --
+	
+	file:write(string.format("%d,", memory.readbyte(DIS_PLAYER_MOVINGDIR)))
+	file:write(string.format("%d,", memory.readbyte(DIS_PLAYER_XSPEEDABSOLUTE)))
+	file:write(string.format("%d,", memory.readbyte(DIS_PLAYER_Y_HIGHPOS)))
+	file:write(string.format("%d,", memory.readbyte(DIS_PLAYER_STATE)))
+	file:write(string.format("%d,", memory.readbyte(GYM_GAMEENGINESUBROUTINE)))
+	file:write(string.format("%d,", memory.readbyte(GYM_PLAYERSTATUS)))
+	
 	
 	--End of CSV line
 	file:write("\n")
