@@ -7,7 +7,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Load CSVs
-TAS = pd.read_csv("data/TAS_HL.csv")
+TAS = pd.read_csv("data/TAS_HappyLee.csv")
 RTA = pd.read_csv("data/RTA_Maru.csv")
 B_L = pd.read_csv("data/BL_RunRight.csv")  # Can change "Right" to "Left"
 SLO = pd.read_csv("data/BL_WalkRight.csv")  # Can change "Right" to "Left"

@@ -53,7 +53,7 @@ local GYM_PLAYERSTATUS          = 0x756  --https://github.com/Kautenja/gym-super
 --Start CSV writer
 local file = assert(io.open("my_data_log.csv", "w"), "Could not open CSV for writing!")
 
-file:write("Frame,LagCount,LagFrame,Input,"
+file:write("Frame,LagCount,LagFrame,Input,")
 file:write("XPos,XPosSmooth,XVel,XVelSmooth,XVelNoSwear,XAcc,YPos,YVel,YVelSmooth,YVelNoSwear,YAcc,")
 file:write("MovingDirByte,XSpeedByte,YPageByte,PlayerState,PlayerControl,PlayerStatus,")
 file:write("\n")
