@@ -65,6 +65,7 @@ RTA.loc[RTA.BPress == 0, "BPress"] = float("nan")
 RTA.loc[RTA.LPress == 0, "LPress"] = float("nan")
 RTA.loc[RTA.RPress == 0, "RPress"] = float("nan")
 
+# Handle inputs for TAS
 TAS["APress"] = TAS.Input.str.contains("A").astype(float)
 TAS["BPress"] = TAS.Input.str.contains("B").astype(float)
 TAS["LPress"] = TAS.Input.str.contains("L").astype(float)

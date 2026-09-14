@@ -33,11 +33,11 @@ local DIS_PLAYER_Y_HIGHPOS      = 0x0B5  --https://www.speedrun.com/smb1/forums/
 local DIS_PLAYER_MOVINGDIR      = 0x045  --https://gist.github.com/1wErt3r/4048722#file-smbdis-asm-L279
 local DIS_PLAYER_XSPEEDABSOLUTE = 0x700  --https://gist.github.com/1wErt3r/4048722#file-smbdis-asm-L381
 local DIS_PLAYER_STATE          = 0x01D  --https://gist.github.com/1wErt3r/4048722#file-smbdis-asm-L273
-                                         --https://gist.github.com/1wErt3r/4048722#file-smbdis-asm-L5893 and -L14586     --usage hints
+                                         --https://gist.github.com/1wErt3r/4048722#file-smbdis-asm-L5893                 --usage hints
+                                         --https://gist.github.com/1wErt3r/4048722#file-smbdis-asm-L14586                --usage hints
                                          --https://github.com/Kautenja/gym-super-mario-bros/blob/master/gym_super_mario_bros/smb_env.py#L306
 local GYM_GAMEENGINESUBROUTINE  = 0x00E  --https://github.com/Kautenja/gym-super-mario-bros/blob/master/gym_super_mario_bros/smb_env.py#L245
-                                         --  _BUSY_STATES = [0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x07]                   --usage hints
-                                         --  0x08 : Normal
+                                         --  0x08 : Normal;  _BUSY_STATES = [0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x07]   --usage hints
 local GYM_PLAYERSTATUS          = 0x756  --https://github.com/Kautenja/gym-super-mario-bros/blob/master/gym_super_mario_bros/smb_env.py#L235
                                          --  _STATUS_MAP = defaultdict(lambda: 'fireball', {0:'small', 1: 'tall'})       --usage hints
 
@@ -46,14 +46,16 @@ local GYM_PLAYERSTATUS          = 0x756  --https://github.com/Kautenja/gym-super
 --  - https://datacrystal.tcrf.net/w/index.php?title=Super_Mario_Bros./RAM_map
 --  - https://web.archive.org/web/20140406030423/http://s276.photobucket.com/user/jdaster64/media/smb_playerphysics.png.html
 --  -  -or- https://web.archive.org/web/20130807122227im_/http://i276.photobucket.com/albums/kk21/jdaster64/smb_playerphysics.png
+--  - https://gist.github.com/1wErt3r/4048722#file-smbdis-asm-L6144     --fast accel threshold
 --  - https://www.speedrun.com/smb1/guides/elaz6
 
 
 --Start CSV writer
 local file = assert(io.open("my_data_log.csv", "w"), "Could not open CSV for writing!")
 
-file:write("Frame,LagCount,LagFrame,Input,XPos,XPosSmooth,XVel,XVelSmooth,XAcc,YPos,YVel,YVelSmooth,YAcc,")
-file:write("MoveDirByte,XSpeedByte,YPageByte,PlayerState,PlayerControl,PlayerStatus,")
+file:write("Frame,LagCount,LagFrame,Input,"
+file:write("XPos,XPosSmooth,XVel,XVelSmooth,XVelNoSwear,XAcc,YPos,YVel,YVelSmooth,YVelNoSwear,YAcc,")
+file:write("MovingDirByte,XSpeedByte,YPageByte,PlayerState,PlayerControl,PlayerStatus,")
 file:write("\n")
 
 
@@ -73,18 +75,18 @@ end)
 
 --Joypad string helper function
 local function get_joypad_string(buttons_down)
-	local joy_str = ""
+	local joypad_string = ""
 	
-	if buttons_down.A      then joy_str = joy_str .. "A" else joy_str = joy_str .. "." end
-	if buttons_down.B      then joy_str = joy_str .. "B" else joy_str = joy_str .. "." end
-	if buttons_down.select then joy_str = joy_str .. "S" else joy_str = joy_str .. "." end
-	if buttons_down.start  then joy_str = joy_str .. "T" else joy_str = joy_str .. "." end
-	if buttons_down.up     then joy_str = joy_str .. "U" else joy_str = joy_str .. "." end
-	if buttons_down.down   then joy_str = joy_str .. "D" else joy_str = joy_str .. "." end
-	if buttons_down.left   then joy_str = joy_str .. "L" else joy_str = joy_str .. "." end
-	if buttons_down.right  then joy_str = joy_str .. "R" else joy_str = joy_str .. "." end
+	if buttons_down.A      then joypad_string = joypad_string .. "A" else joypad_string = joypad_string .. "." end
+	if buttons_down.B      then joypad_string = joypad_string .. "B" else joypad_string = joypad_string .. "." end
+	if buttons_down.select then joypad_string = joypad_string .. "S" else joypad_string = joypad_string .. "." end
+	if buttons_down.start  then joypad_string = joypad_string .. "T" else joypad_string = joypad_string .. "." end
+	if buttons_down.up     then joypad_string = joypad_string .. "U" else joypad_string = joypad_string .. "." end
+	if buttons_down.down   then joypad_string = joypad_string .. "D" else joypad_string = joypad_string .. "." end
+	if buttons_down.left   then joypad_string = joypad_string .. "L" else joypad_string = joypad_string .. "." end
+	if buttons_down.right  then joypad_string = joypad_string .. "R" else joypad_string = joypad_string .. "." end
 	
-	return joy_str
+	return joypad_string
 end
 
 
@@ -122,19 +124,35 @@ local function get_xvel()
 end
 
 
---X velocity smooth, scaled (includes accumulators; for visualization)
+--X velocity smooth, scaled, naive logic, capped (includes accumulators; for visualization)
 local function get_xvel_smooth()
 	local xvel1 = memory.readbytesigned(ram_Player_X_Speed)
 	local xvel2 = memory.readbyte(ram_Player_X_MoveForce)
 	
-	--This logic is wrong for this application, per https://claude.ai/share/91733d95-12e5-46f5-b120-e794083eb3ab
-	--if xvel1 < 0 then  --Process subspeed byte to add to X velocity
-	--	xvel2 = -AND(256 - xvel2, 0xFF)
-	--end
+	local xvel = xvel1 + xvel2/256
+	
+	if xvel > 40 then  --Apply hardcoded "hard cap" on max speed
+		xvel = 40
+	elseif xvel < -40 then
+		xvel = -40
+	end
+	
+	return xvel
+end
+
+
+--X velocity smooth, scaled, NoSwear logic, capped (includes accumulators; for visualization)
+local function get_xvel_NoSwear()
+	local xvel1 = memory.readbytesigned(ram_Player_X_Speed)
+	local xvel2 = memory.readbyte(ram_Player_X_MoveForce)
+	
+	if xvel1 < 0 then  --Process subspeed byte to add to X velocity
+		xvel2 = -AND(256 - xvel2, 0xFF)
+	end
 	
 	local xvel = xvel1 + xvel2/256
 	
-	if xvel > 40 then  --Apply hardcoded "hard cap" on max possible speed
+	if xvel > 40 then  --Apply hardcoded "hard cap" on max speed
 		xvel = 40
 	elseif xvel < -40 then
 		xvel = -40
@@ -177,15 +195,25 @@ local function get_yvel()
 end
 
 
---Y velocity smooth, scaled (includes accumulators; for visualization)
+--Y velocity smooth, scaled, naive logic (includes accumulators; for visualization)
 local function get_yvel_smooth()
 	local yvel1 = memory.readbytesigned(ram_Player_Y_Speed)
 	local yvel2 = memory.readbyte(ram_Player_Y_MoveForce)
 	
-	--This logic is wrong for this application, per https://claude.ai/share/91733d95-12e5-46f5-b120-e794083eb3ab
-	--if yvel1 < 0 then  --Process subspeed byte to add to Y velocity
-	--	yvel2 = -AND(256 - yvel2, 0xFF)
-	--end
+	local yvel = yvel1 + yvel2/256
+	
+	return yvel
+end
+
+
+--Y velocity smooth, scaled, NoSwear logic (includes accumulators; for visualization)
+local function get_yvel_NoSwear()
+	local yvel1 = memory.readbytesigned(ram_Player_Y_Speed)
+	local yvel2 = memory.readbyte(ram_Player_Y_MoveForce)
+	
+	if yvel1 < 0 then  --Process subspeed byte to add to Y velocity
+		yvel2 = -AND(256 - yvel2, 0xFF)
+	end
 	
 	local yvel = yvel1 + yvel2/256
 	
@@ -247,6 +275,9 @@ while true do
 	local xvel_smooth = get_xvel_smooth()
 	file:write(string.format("%.9f,", xvel_smooth))
 	
+	local xvel_NoSwear = get_xvel_NoSwear()
+	file:write(string.format("%.9f,", xvel_NoSwear))
+	
 	--X acceleration
 	local xacc = get_xacc()
 	file:write(string.format("%.9f,", xacc))
@@ -263,6 +294,9 @@ while true do
 	
 	local yvel_smooth = get_yvel_smooth()
 	file:write(string.format("%.9f,", yvel_smooth))
+	
+	local yvel_NoSwear = get_yvel_NoSwear()
+	file:write(string.format("%.9f,", yvel_NoSwear))
 	
 	--Y acceleration
 	local yacc = get_yacc()
