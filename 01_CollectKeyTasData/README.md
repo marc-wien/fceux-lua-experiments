@@ -8,4 +8,4 @@
 **Data Visualization:**
 
 ![Plot of X-Position and X-Velocity vs. Frame # from collected data](Output_Plot_Smooth.png?raw=true)
-Caveat: Position and Velocity curves here incorporate *corrected from v1* accumulator values for visual smoothness
+Caveat: Position and Velocity curves here incorporate accumulator values for visual smoothness (*X Vel processing here differs from v1*)
