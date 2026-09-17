@@ -111,6 +111,14 @@ local function copy_seq(seq)
     return copy
 end
 
+-- Same shape either way: fed a CONFIRMED (x_pos, frame) this branch truly
+-- achieved -- safe to raise the incumbent -- or the branch's CURRENT
+-- (x_pos, depth) as an optimistic "instant cap speed from here" ceiling --
+-- safe only to prune against, never to raise the incumbent.
+local function score_at(x_pos, frame)
+    return x_pos - frame * PIXELS_PER_FRAME_AT_CAP
+end
+
 local function brute_force(max_depth)
     local frontier = {}
     local results = {}
@@ -118,28 +126,45 @@ local function brute_force(max_depth)
 
     local best_dominance_score = -math.huge
     local pruned_count = 0
+    local capped_count = 0
+    local evaluated = 0
 
     while true do
         local node = pop_next(frontier)
         if node == nil then break end
 
         local r = replay(node.seq)
+        evaluated = evaluated + 1
 
-        -- Scored before the leaf/internal split so leaves also raise the
-        -- incumbent; under DFS they're where good scores appear first.
-        local score = r.pos_at_max_speed and dominance_score(r) or nil
-        local dominated = score ~= nil and score < best_dominance_score
-        if score ~= nil and not dominated then
-            best_dominance_score = score
+        local reached_cap = r.frame_at_max_speed == node.depth
+        local bound = score_at(r.final_x_pos, node.depth)  -- optimistic; defined for every node
+        local dominated = bound < best_dominance_score
+
+        if reached_cap and not dominated then
+            emu.print(string.format("  BEST d=%d score=%.3f (was %s) seq=%s",
+                node.depth, bound,
+                best_dominance_score == -math.huge and "none"
+                    or string.format("%.3f", best_dominance_score),
+                table.concat(node.seq, ",")))
+            best_dominance_score = bound
         end
 
-        if node.depth == max_depth then
+        if dominated then
+            pruned_count = pruned_count + 1
+            local skipped = node.depth == max_depth and 0
+                or (#ALPHABET) ^ (max_depth - node.depth)
+            emu.print(string.format("PRUNED d=%d bound=%.3f < best=%.3f skips~%d seq=%s",
+                node.depth, bound, best_dominance_score, skipped,
+                table.concat(node.seq, ",")))
+        elseif reached_cap then
+            capped_count = capped_count + 1
+            emu.print(string.format("CAPPED d=%d score=%.3f seq=%s (rest is determined, stopping)",
+                node.depth, bound, table.concat(node.seq, ",")))
             r.seq = node.seq
             results[#results + 1] = r
-        elseif dominated then
-            pruned_count = pruned_count + 1
-            emu.print(string.format("PRUNED seq=%-15s score=%.3f < best=%.3f",
-                table.concat(node.seq, ","), score, best_dominance_score))
+        elseif node.depth == max_depth then
+            r.seq = node.seq
+            results[#results + 1] = r
         else
             for _, sym in ipairs(ALPHABET) do
                 local child_seq = copy_seq(node.seq)
@@ -148,6 +173,11 @@ local function brute_force(max_depth)
             end
         end
     end
+
+    emu.print(string.format(
+        "nodes evaluated: %d, %d pruned, %d capped early (unpruned full tree would be %d)",
+        evaluated, pruned_count, capped_count,
+        ((#ALPHABET) ^ (max_depth + 1) - 1) / (#ALPHABET - 1)))
 
     return results, pruned_count
 end
