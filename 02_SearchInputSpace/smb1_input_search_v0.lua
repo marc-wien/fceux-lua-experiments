@@ -138,14 +138,13 @@ local function brute_force(max_depth)
 
         local reached_cap = r.frame_at_max_speed == node.depth
         local bound = score_at(r.final_x_pos, node.depth)  -- optimistic; defined for every node
-        local dominated = bound < best_dominance_score
+        local dominated = bound <= best_dominance_score
 
         if reached_cap and not dominated then
-            emu.print(string.format("  BEST d=%d score=%.3f (was %s) seq=%s",
+            emu.print(string.format("  BEST d=%d score=%.3f (was %s)",
                 node.depth, bound,
                 best_dominance_score == -math.huge and "none"
-                    or string.format("%.3f", best_dominance_score),
-                table.concat(node.seq, ",")))
+                    or string.format("%.3f", best_dominance_score)))
             best_dominance_score = bound
         end
 
@@ -153,13 +152,12 @@ local function brute_force(max_depth)
             pruned_count = pruned_count + 1
             local skipped = node.depth == max_depth and 0
                 or (#ALPHABET) ^ (max_depth - node.depth)
-            emu.print(string.format("PRUNED d=%d bound=%.3f < best=%.3f skips~%d seq=%s",
-                node.depth, bound, best_dominance_score, skipped,
-                table.concat(node.seq, ",")))
+            emu.print(string.format("PRUNED d=%d bound=%.3f <= best=%.3f skips~%d",
+                node.depth, bound, best_dominance_score, skipped))
         elseif reached_cap then
             capped_count = capped_count + 1
-            emu.print(string.format("CAPPED d=%d score=%.3f seq=%s (rest is determined, stopping)",
-                node.depth, bound, table.concat(node.seq, ",")))
+            emu.print(string.format("CAPPED d=%d score=%.3f (rest is determined, stopping)",
+                node.depth, bound))
             r.seq = node.seq
             results[#results + 1] = r
         elseif node.depth == max_depth then
