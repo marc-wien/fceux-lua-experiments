@@ -4,13 +4,18 @@
 -- emulator paused, run this script, then unpause.
 --
 
+-- FCEUX does not commit a Lua savestate until a frame boundary passes, so the
+-- anchor must be settled before anything reads it. Save, advance once to force
+-- the commit, then load it back -- the wasted frame is discarded by the load.
 local start_state = savestate.create()
 savestate.save(start_state)
+emu.frameadvance()
+savestate.load(start_state)
 
 emu.speedmode("nothrottle")  -- "maximum" is faster but disables rendering
 
 local MAX_SPEED = 40  -- hard cap in 1/16-px units; requires B held
-local PROGRESS_EVERY = 500  -- node evaluations between progress lines
+local PROGRESS_EVERY = 1000  -- node evaluations between progress lines
 
 -- x_vel is the exact signed byte (cap detection). x_vel_ub adds the 0x0705
 -- accumulator, an unsigned byte, so it is always >= true velocity -- bound
@@ -37,12 +42,23 @@ end
 -- pop_next is LIFO, so the LAST entry is explored FIRST: RB last means the
 -- opening dive is all-RB, seeding a confirmed incumbent immediately.
 local ALPHABET = { "LBA", "LB", "B", "RBA", "RB" }
+local BUTTONS = { "up", "down", "left", "right", "A", "B", "select", "start" }
+
+-- Every button must be explicitly true or false. FCEUX treats a nil/omitted
+-- key as "leave this button to the user", NOT as released.
+local function make_input(held)
+    local t = {}
+    for _, b in ipairs(BUTTONS) do t[b] = false end
+    for _, b in ipairs(held) do t[b] = true end
+    return t
+end
+
 local DECODE_TABLE = {
-    B    = {B = true},
-    LB   = {left  = true, B = true},
-    RB   = {right = true, B = true},
-    RBA  = {right = true, B = true, A = true},
-    LBA  = {left  = true, B = true, A = true},
+    B    = make_input{"B"},
+    LB   = make_input{"left", "B"},
+    RB   = make_input{"right", "B"},
+    RBA  = make_input{"right", "B", "A"},
+    LBA  = make_input{"left", "B", "A"},
 }
 
 local PIXELS_PER_FRAME_AT_CAP = MAX_SPEED / 16  -- 2.5 px/frame
@@ -280,17 +296,19 @@ local function search(max_depth)
     return results
 end
 
-local results = search(7)
+local results = search(50)
 
--- Rows mix capped-early and full-depth nodes, so final_x is not on a common
--- horizon; max_speed_pos/@frame are the comparable pair.
-for _, r in ipairs(results) do
-    emu.print(string.format(
-        "seq=%-15s final_x=%.3f final_v=%d  max_speed_pos=%s @frame=%s",
-        table.concat(r.seq, ","),
-        r.final_x_pos,
-        r.final_x_vel,
-        r.pos_at_max_speed and string.format("%.3f", r.pos_at_max_speed) or "never",
-        r.frame_at_max_speed or "-"
-    ))
+-- Top results only. Printing every leaf floods the console and can hang it.
+local REPORT_TOP = 20
+
+table.sort(results, function(a, b)
+    return score_at(a.final_x_pos, #a.seq) > score_at(b.final_x_pos, #b.seq)
+end)
+
+emu.print(string.format("results=%d, showing top %d", #results, REPORT_TOP))
+for i = 1, math.min(REPORT_TOP, #results) do
+    local r = results[i]
+    emu.print(string.format("%2d. score=%.3f d=%-3d x=%.3f v=%-4d %s",
+        i, score_at(r.final_x_pos, #r.seq), #r.seq,
+        r.final_x_pos, r.final_x_vel, table.concat(r.seq, ",")))
 end

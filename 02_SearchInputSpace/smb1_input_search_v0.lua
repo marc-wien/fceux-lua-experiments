@@ -81,7 +81,28 @@ local function replay(seq)
     }
 end
 
-local PIXELS_PER_FRAME_AT_CAP = MAX_SPEED / 16  -- x_vel byte is 1/16 px
+local PIXELS_PER_FRAME_AT_CAP = MAX_SPEED / 16 -- x_vel byte is 1/16 px
+
+-- Optimistic lower bound on the number of frames required to reach MAX_SPEED,
+-- assuming the current x_vel is already an upper bound on true velocity and
+-- that the continuous acceleration profile is an upper bound on achievable
+-- acceleration.
+local function min_frames_to_max_speed(x_vel)
+    if x_vel >= MAX_SPEED then
+        return 0
+    end
+
+    local A1 = 304 / 256 -- (304 / 4096 px/frame^2) * 16 velocity units/px
+    local A2 = 456 / 256 -- (456 / 4096 px/frame^2) * 16 velocity units/px
+
+    if x_vel < 25 then
+        local frames_to_25 = (25 - x_vel) / A1
+        local frames_25_to_40 = (MAX_SPEED - 25) / A2
+        return math.ceil(frames_to_25 + frames_25_to_40)
+    else
+        return math.ceil((MAX_SPEED - x_vel) / A2)
+    end
+end
 
 -- Frames to reach a fixed future X, minus the shared X/rate term that cancels
 -- across branches. Higher = reaches any rightward target sooner.

@@ -10,13 +10,18 @@
 -- parent_state / own_state / current_state and call replay(node_seq(node)).
 --
 
+-- FCEUX does not commit a Lua savestate until a frame boundary passes, so the
+-- anchor must be settled before anything reads it. Save, advance once to force
+-- the commit, then load it back -- the wasted frame is discarded by the load.
 local start_state = savestate.create()
 savestate.save(start_state)
+emu.frameadvance()
+savestate.load(start_state)
 
-emu.speedmode("nothrottle")  -- "maximum" is faster but disables rendering
+emu.speedmode("maximum")  -- "maximum" is faster but disables rendering
 
 local MAX_SPEED = 40        -- hard cap in 1/16-px units; requires B held
-local PROGRESS_EVERY = 500  -- node evaluations between progress lines
+local PROGRESS_EVERY = 1000  -- node evaluations between progress lines
 
 
 -- === Measurement ===========================================================
@@ -49,12 +54,25 @@ end
 -- pop_next is LIFO, so the LAST entry is explored FIRST. RB last means the
 -- opening dive is all-RB, which seeds a confirmed incumbent immediately.
 local ALPHABET = { "LBA", "LB", "B", "RBA", "RB" }
+
+local BUTTONS = { "up", "down", "left", "right", "A", "B", "select", "start" }
+
+-- Every button must be explicitly true or false. FCEUX treats a nil/omitted
+-- key as "leave this button to the user", NOT as released -- so a partial
+-- table lets unmanaged buttons carry over and makes the input string a lie.
+local function make_input(held)
+    local t = {}
+    for _, b in ipairs(BUTTONS) do t[b] = false end
+    for _, b in ipairs(held) do t[b] = true end
+    return t
+end
+
 local DECODE_TABLE = {
-    B    = {B = true},
-    LB   = {left  = true, B = true},
-    RB   = {right = true, B = true},
-    RBA  = {right = true, B = true, A = true},
-    LBA  = {left  = true, B = true, A = true},
+    B    = make_input{"B"},
+    LB   = make_input{"left", "B"},
+    RB   = make_input{"right", "B"},
+    RBA  = make_input{"right", "B", "A"},
+    LBA  = make_input{"left", "B", "A"},
 }
 
 
@@ -299,7 +317,7 @@ end
 
 -- === Run ===================================================================
 
-local results = search(7)
+local results = search(50)
 
 -- Re-derive every result from the anchor. Catches drift in the state chain.
 local mismatches = 0
@@ -313,8 +331,17 @@ for _, r in ipairs(results) do
 end
 emu.print(string.format("verification: %d results, %d mismatches", #results, mismatches))
 
-for _, r in ipairs(results) do
-    emu.print(string.format("seq=%-15s d=%-3d x=%.3f v=%-4d %s",
-        table.concat(r.seq, ","), r.depth, r.x_pos, r.x_vel,
-        r.capped and "CAPPED" or ""))
+-- Top results only. Printing every leaf floods the console and can hang it.
+local REPORT_TOP = 20
+
+table.sort(results, function(a, b)
+    return score_at(a.x_pos, a.depth) > score_at(b.x_pos, b.depth)
+end)
+
+emu.print(string.format("results=%d, showing top %d", #results, REPORT_TOP))
+for i = 1, math.min(REPORT_TOP, #results) do
+    local r = results[i]
+    emu.print(string.format("%2d. score=%.3f d=%-3d x=%.3f v=%-4d %s %s",
+        i, score_at(r.x_pos, r.depth), r.depth, r.x_pos, r.x_vel,
+        r.capped and "CAPPED" or "      ", table.concat(r.seq, ",")))
 end
