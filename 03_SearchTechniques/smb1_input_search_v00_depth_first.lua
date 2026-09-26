@@ -1,5 +1,6 @@
 --
--- demo_00_depth_first_e.lua
+-- === SMB1 Per-Frame Input Sequence Depth-First Search Demo ===
+--
 -- Depth-first branch-and-bound over per-frame inputs, SMB1 in FCEUX.
 --
 -- A node is an input string. It is evaluated by replaying the whole string
@@ -19,7 +20,7 @@
 -- Search reach it solely through report_* calls, and it can be skipped
 -- entirely on a first read.
 --
--- Setup: pause FCEUX on the first controllable frame, run this, then unpause.
+-- Setup: Load FCS savestate file with emulator paused, then run this, then unpause
 --
 
 -- === Settings ===============================================================
