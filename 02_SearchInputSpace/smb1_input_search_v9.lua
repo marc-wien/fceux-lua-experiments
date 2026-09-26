@@ -26,28 +26,28 @@
 -- "powerset" : all 16 combinations of L, R, B, A (includes L+R)
 -- "no_lr"    : the 12 that never press L and R together
 -- "maru"     : the 5-symbol RTA set, B held on every frame
-local ALPHABET_MODE = "no_lr"
+local ALPHABET_MODE = "powerset"
 
-local HANDOFF_FRAME = 5    -- ceiling on Phase A; may stop earlier (see below)
-local MAX_LEVEL_STATES = 60000  -- if a Phase A level exceeds this, hand off now
+local HANDOFF_FRAME = 6    -- ceiling on Phase A; may stop earlier (see below)
+local MAX_LEVEL_STATES = 10000  -- if a Phase A level exceeds this, hand off now
 local MAX_DEPTH = 60        -- frames; must exceed the frame a cap is reachable
 
 -- Guards. MAX_FRONTIER and MAX_EXPANSIONS END the proof if they fire:
 -- unexpanded states remain, so the answer is "best found", not "proved".
 -- MAX_SEEN does not -- dedup simply stops firing, costing work, discarding
 -- nothing.
-local MAX_FRONTIER = 200000
-local MAX_EXPANSIONS = 5e6
-local MAX_SEEN = 1500000
+local MAX_FRONTIER = 300000
+local MAX_EXPANSIONS = 50e6
+local MAX_SEEN = 8000000
 
 -- Heads-up display. Drawing must happen every frame to stay visible, so the
 -- per-frame path only issues gui calls against precomputed values; anything
 -- expensive (histogram, sparkline) is recomputed on HUD_REFRESH events.
 local SHOW_HUD = true
-local SHOW_HISTOGRAM = true   -- ~20 extra gui.box calls per frame
-local SHOW_SPARKLINE = true   -- frontier-size trace; ~40 gui.line calls per frame
-local HUD_REFRESH = 2000      -- events between expensive HUD recomputes
-local PROGRESS_EVERY = 2000   -- events between console progress lines
+local SHOW_HISTOGRAM = false   -- ~20 extra gui.box calls per frame
+local SHOW_SPARKLINE = false   -- frontier-size trace; ~40 gui.line calls per frame
+local HUD_REFRESH = 4000      -- events between expensive HUD recomputes
+local PROGRESS_EVERY = 1000   -- events between console progress lines
 
 
 -- === Anchor =================================================================
@@ -93,12 +93,18 @@ end
 -- Symbols name the buttons held: direction, then B, then A. "-" is no input.
 -- Order is load-bearing: pop_next and Phase A both explore the LAST entry
 -- first, so RB goes last to make the opening line "just run right".
+-- local ALPHABETS = {
+    -- powerset = { "-", "A", "B", "BA", "L", "LA", "LB", "LBA",
+                 -- "LR", "LRA", "LRB", "LRBA", "R", "RA", "RBA", "RB" },
+    -- no_lr    = { "-", "A", "B", "BA", "L", "LA", "LB", "LBA",
+                 -- "R", "RA", "RBA", "RB" },
+    -- maru     = { "LBA", "LB", "B", "RBA", "RB" },
+-- }
 local ALPHABETS = {
     powerset = { "-", "A", "B", "BA", "L", "LA", "LB", "LBA",
                  "LR", "LRA", "LRB", "LRBA", "R", "RA", "RBA", "RB" },
-    no_lr    = { "-", "A", "B", "BA", "L", "LA", "LB", "LBA",
-                 "R", "RA", "RBA", "RB" },
-    maru     = { "LBA", "LB", "B", "RBA", "RB" },
+    no_lr    = { "RB", "RBA", "L", "R", "B", "-", "A", "BA", "RA", "LA", "LB", "LBA" },
+    maru     = { "RB", "RBA", "B", "LB", "LBA" },
 }
 
 local ALPHABET = ALPHABETS[ALPHABET_MODE]
@@ -204,6 +210,11 @@ local function draw_bar(y, bar)
     if fill > 1 then
         gui.box(BAR_X + 1, y + 1, BAR_X + fill, y + BAR_H - 1, bar.col, bar.col)
     end
+    -- Optional reference line, e.g. where a cap falls on this scale.
+    if bar.tick and bar.tick > 0 and bar.tick < 1 then
+        local tx = BAR_X + math.floor(BAR_W * bar.tick)
+        gui.box(tx, y - 1, tx, y + BAR_H + 1, "#FFFFFF", "#FFFFFF")
+    end
     gui.text(BAR_X + BAR_W + 6, y - 1, bar.label)
 end
 
@@ -212,7 +223,7 @@ local function draw_hud()
     gui.text(4, 32, hud.phase)
     draw_bar(42, hud.bar1)
     draw_bar(50, hud.bar2)
-    gui.text(4, 56, hud.stats)
+    gui.text(4, 59, hud.stats)
 
     if SHOW_HISTOGRAM and #hud.hist > 0 then
         local w = math.floor(BAR_W / HIST_BUCKETS)
@@ -368,6 +379,7 @@ local function phase_a()
         local seen, next_level = {}, {}
         local pruned, dupes = 0, 0
         local total = #level
+        local max_children = total * #ALPHABET
 
         hud.phase = string.format("PHASE A  frame %d/%d", depth + 1, HANDOFF_FRAME)
         hud.bar1.col, hud.bar2.col = "#40C040", "#C08040"
@@ -376,8 +388,13 @@ local function phase_a()
             -- Cheap per-node HUD update; strings only, no structure walks.
             hud.bar1.frac = i / total
             hud.bar1.label = string.format("%d/%d", i, total)
-            hud.bar2.frac = #next_level / MAX_LEVEL_STATES
-            hud.bar2.label = string.format("%d/%d", #next_level, MAX_LEVEL_STATES)
+            -- Scaled against every child this level could possibly produce,
+            -- so the bar reads as "how much survived dedup and pruning".
+            -- The white tick is where MAX_LEVEL_STATES falls on that scale.
+            hud.bar2.frac = #next_level / max_children
+            hud.bar2.tick = MAX_LEVEL_STATES / max_children
+            hud.bar2.label = string.format("%d/%dk kept", #next_level,
+                math.floor(max_children / 1000))
             hud.stats = string.format("kept %d  dup %d  prune %d  best %s",
                 #next_level, dupes, pruned, best_score_str())
 
@@ -479,6 +496,7 @@ local function phase_b(frontier)
     local reached, skipped = 0, 0
     hud.phase = "PHASE B  rollouts"
     hud.bar1.col, hud.bar2.col = "#40C040", "#8080C0"
+    hud.bar1.tick, hud.bar2.tick = nil, nil
     hud.hist = {}
     for i, node in ipairs(frontier) do
         -- The bound caps everything reachable from this state, so if it cannot
@@ -523,6 +541,7 @@ local function phase_c(frontier)
 
     hud.phase = "PHASE C  best-first"
     hud.bar1.col, hud.bar2.col = "#40C040", "#C04040"
+    hud.bar1.tick, hud.bar2.tick = nil, nil
     hud.hist, hud.spark = {}, {}
 
     -- The heap top holds the highest bound left, and a child never bounds
@@ -530,13 +549,26 @@ local function phase_c(frontier)
     -- the incumbent -- which makes the gap between them a real progress
     -- measure, not a guess. It races the frontier filling up.
     local start_top = heap[1] and heap[1].bound or 0
+    local start_heap = #heap
 
     local function refresh_hud()
         local top = heap[1] and heap[1].bound or best_score
         local span = start_top - best_score
         hud.bar1.frac = span > 0 and (start_top - top) / span or 1
         hud.bar1.label = string.format("%.1f>%.1f", top, best_score)
-        hud.bar2.frac = #heap / MAX_FRONTIER
+        -- Scaled against every node the expansions so far could possibly have
+        -- added (each pops one and pushes up to #ALPHABET), so the bar reads
+        -- as "how much of the possible growth survived dedup and pruning".
+        -- The white tick is where MAX_FRONTIER falls on that scale; it slides
+        -- in from the right as the ceiling grows, and reaching it ends the
+        -- proof. Absolute numbers stay in the label.
+        local ceiling = expansions * (#ALPHABET - 1)
+        if ceiling > 0 then
+            hud.bar2.frac = (#heap - start_heap) / ceiling
+            hud.bar2.tick = (MAX_FRONTIER - start_heap) / ceiling
+        else
+            hud.bar2.frac, hud.bar2.tick = 0, nil
+        end
         hud.bar2.label = string.format("%dk/%dk",
             math.floor(#heap / 1000), math.floor(MAX_FRONTIER / 1000))
         hud.stats = string.format("exp %d  prune %d  dup %d",
