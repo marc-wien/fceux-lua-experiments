@@ -308,17 +308,17 @@ end
 
 local function report_progress(evaluated, pruned, frontier)
     local d, k = unwound(frontier)
-    emu.print(string.format("    (%d) pruned=%d, frontier=%3d, best=%s %s",
-        evaluated, pruned, #frontier,
-        best_seq and string.format("%.3f", best_score) or "none", best_branch) ..
+    emu.print(string.format("    (%d) best=%s %s, pruned=%d, frontier=%3d",
+        evaluated, best_seq and string.format("%.3f", best_score) or "none",
+        best_branch, pruned, #frontier) ..
         (d and string.format(" |  unwound to frame %d, on %d of %d:  %s ",
             d, k, #ALPHABET, try_status(k)) or " |  still on first dive ") .. 
         " |  prunes by frame:  " .. prune_summary())
 end
 
 local function report_done(evaluated, pruned)
-    emu.print(string.format("    done: evaluated=%d, pruned=%d, min_speed=%d"
-        .. "  |  prunes by frame:  %s", evaluated, pruned, min_vel, prune_summary()))
+    emu.print(string.format("    done: evaluated=%d, pruned=%d, min_speed=%d" .. 
+        "  |  prunes by frame:  %s", evaluated, pruned, min_vel, prune_summary()))
     if best_seq then
         -- A node's depth is its string length, so #best_seq is the cap frame.
         emu.print(string.format("| *BEST* | s=%.3f, d=%d | %s",
