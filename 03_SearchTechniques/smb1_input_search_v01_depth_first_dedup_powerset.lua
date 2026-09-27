@@ -320,7 +320,7 @@ local function report_best(new_best, node)
     best_branch = branch_point(node.seq)
     best_label = string.format("BEST YET = %7.3f  %s %-2d frames", new_best,
         best_branch, node.depth)
-    emu.print(string.format("<<*BEST*>> s=%.3f, d=%d | %s",
+    emu.print(string.format("**BEST** s=%.3f, d=%d | %s",
         new_best, node.depth, table.concat(node.seq, ",")))
 end
 
@@ -384,8 +384,8 @@ local function report_progress(evaluated, pruned, dupes, frontier)
         where = string.format("| on %d, %d of %d: %s",
             d, k, #ALPHABET, try_status(k))
     end
-    emu.print(string.format("    (%d) s=%s %s| frnt=%3d, prun=%d,",
-        evaluated, best_seq and string.format("%.3f", best_score) or "none",
+    emu.print(string.format("  (%dk) s=%s %s| frnt=%3d, prun=%d,",
+        evaluated/1000, best_seq and string.format("%.3f", best_score) or "none",
         best_branch, #frontier, pruned)
         .. string.format(" dup=%d ", dupes)
         .. where .. "| prun: " .. band_summary(prunes_by_band)
