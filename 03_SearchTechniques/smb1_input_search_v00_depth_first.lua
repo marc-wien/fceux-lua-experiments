@@ -34,7 +34,7 @@ local MAX_DEPTH = 50          -- longest input string tried. The opening dive
 
 -- Reporting
 local SHOW_LIVE = true        -- draw current and best sequences on screen
-local PROGRESS_EVERY = 100    -- nodes between console progress lines
+local PROGRESS_EVERY = 500    -- nodes between console progress lines
 local PRUNE_BAND = 10         -- frames per bucket in the prune-depth summary
 
 -- === Game constants =========================================================
