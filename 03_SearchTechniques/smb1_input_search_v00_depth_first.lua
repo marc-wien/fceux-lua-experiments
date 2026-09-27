@@ -205,18 +205,19 @@ local function wrap(seq)
 end
 
 -- Where a sequence first leaves the default path (TRY_ORDER[1] every frame).
+-- "(init)" means it never does: the opening dive. Both forms are 7 characters
+-- wide so the columns they sit in stay aligned.
 local function branch_point(seq)
     for i, s in ipairs(seq) do
         if s ~= TRY_ORDER[1] then return string.format("@%02d=%-3s", i, s) end
     end
     return "(init) "
-    --return "all " .. TRY_ORDER[1]
 end
 
 -- Live display. Prebuilt once per node / per new best, drawn every frame
--- because gui text lasts one frame. Both headers open with a four-letter word
--- and %8.3f so scores align at the decimal (given a monospaced overlay font).
-local best_lines, best_label, best_branch = {}, "best: none", "none"
+-- because gui text lasts one frame. Both headers open with an 8-character
+-- label and %7.3f, so scores align at the decimal (given a monospaced font).
+local best_lines, best_label, best_branch = {}, "BEST YET = none", ""
 
 local function report_replay_start(seq)
     if not SHOW_LIVE then return nil end
@@ -230,7 +231,10 @@ local function report_frame(live, x_pos, x_vel_ub, frame)
     gui.text(4, y, best_label)
     for _, line in ipairs(best_lines) do y = y + 8; gui.text(4, y, line) end
     y = y + 12
-    gui.text(4, y, string.format("MAX POSS = %7.3f  %s %-6s", ceiling,
+    -- "pruned!" can appear before the replay finishes. It is still exact: the
+    -- ceiling only falls along a replay and the incumbent cannot change until
+    -- the replay ends, so this node is certain to be pruned.
+    gui.text(4, y, string.format("MAX POSS = %7.3f  %s %-10s", ceiling,
         live.branch, ceiling > best_score and "testing..." or "pruned!"))
     for _, line in ipairs(live.lines) do y = y + 8; gui.text(4, y, line) end
 end
@@ -313,12 +317,12 @@ local function report_progress(evaluated, pruned, frontier)
 end
 
 local function report_done(evaluated, pruned)
-    emu.print(string.format("done: evaluated=%d pruned=%d min_speed=%d",
-        evaluated, pruned, min_vel))
-    emu.print("    prunes by frame: " .. prune_summary())
+    emu.print(string.format("    done: evaluated=%d, pruned=%d, min_speed=%d"
+        .. "  |  prunes by frame:  %s", evaluated, pruned, min_vel, prune_summary()))
     if best_seq then
-        emu.print(string.format("best %.3f: %s", best_score,
-            table.concat(best_seq, ",")))
+        -- A node's depth is its string length, so #best_seq is the cap frame.
+        emu.print(string.format("| *BEST* | s=%.3f, d=%d | %s",
+            best_score, #best_seq, table.concat(best_seq, ",")))
     end
 end
 
