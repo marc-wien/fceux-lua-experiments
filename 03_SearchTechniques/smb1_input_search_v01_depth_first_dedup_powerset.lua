@@ -42,7 +42,7 @@ local ALLOW_LR = false        -- allow Left+Right pressed together
 local ALLOW_UD = false        -- allow Up+Down pressed together
 
 -- Memory
-local GC_EVERY = 5000         -- savestates created between full collections;
+local GC_EVERY = 10000        -- savestates created between full collections;
                               -- lower it if memory climbs on long runs
 local MAX_SEEN = 1000000      -- states remembered for dedup, ~2 KB each (~2 GB
                               -- at the cap). Hitting it only stops dedup from
@@ -51,7 +51,7 @@ local MAX_SEEN = 1000000      -- states remembered for dedup, ~2 KB each (~2 GB
 -- Reporting
 local SHOW_LIVE = false        -- draw current and best sequences on screen
 local PROGRESS_EVERY = 10000   -- nodes between console progress lines
-local DEPTH_BAND = 15         -- frames per bucket in the by-frame summaries
+local DEPTH_BAND = 10         -- frames per bucket in the by-frame summaries
 
 -- === Game constants =========================================================
 
