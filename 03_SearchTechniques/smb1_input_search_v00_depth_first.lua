@@ -34,7 +34,7 @@ local MAX_DEPTH = 50          -- longest input string tried. The opening dive
 
 -- Reporting
 local SHOW_LIVE = true        -- draw current and best sequences on screen
-local PROGRESS_EVERY = 1000   -- nodes between console progress lines
+local PROGRESS_EVERY = 100    -- nodes between console progress lines
 local PRUNE_BAND = 10         -- frames per bucket in the prune-depth summary
 
 -- === Game constants =========================================================
@@ -210,7 +210,8 @@ local function branch_point(seq)
     for i, s in ipairs(seq) do
         if s ~= TRY_ORDER[1] then return string.format("@%02d=%-3s", i, s) end
     end
-    return "all " .. TRY_ORDER[1]
+    return "(init) "
+    --return "all " .. TRY_ORDER[1]
 end
 
 -- Live display. Prebuilt once per node / per new best, drawn every frame
@@ -226,13 +227,13 @@ end
 local function report_frame(live, x_pos, x_vel_ub, frame)
     if not live then return end
     local ceiling = bound(x_pos, x_vel_ub, frame)
-    local y = 32
-    gui.text(4, y, string.format("MAX POSS = %7.3f  %s  %-6s", ceiling,
-        live.branch, ceiling > best_score and "testing" or "prune!"))
-    for _, line in ipairs(live.lines) do y = y + 8; gui.text(4, y, line) end
-    y = y + 12
+    local y = 34
     gui.text(4, y, best_label)
     for _, line in ipairs(best_lines) do y = y + 8; gui.text(4, y, line) end
+    y = y + 12
+    gui.text(4, y, string.format("MAX POSS = %7.3f  %s %-6s", ceiling,
+        live.branch, ceiling > best_score and "testing..." or "pruned!"))
+    for _, line in ipairs(live.lines) do y = y + 8; gui.text(4, y, line) end
 end
 
 -- A prune at depth d removes everything below it, so shallow prunes are worth
@@ -259,10 +260,10 @@ end
 local function report_best(new_best, node)
     best_lines = wrap(node.seq)
     best_branch = branch_point(node.seq)
-    best_label = string.format("BEST YET = %7.3f  %s  %-2d frames", new_best,
+    best_label = string.format("BEST YET = %7.3f  %s %-2d frames", new_best,
         best_branch, node.depth)
-    emu.print(string.format("BEST d=%-3d score=%8.3f | %s",
-        node.depth, new_best, table.concat(node.seq, ",")))
+    emu.print(string.format("| *BEST* | s=%.3f, d=%d | %s",
+        new_best, node.depth, table.concat(node.seq, ",")))
 end
 
 -- The stack holds, for each depth on the current path, the siblings not yet
@@ -296,7 +297,7 @@ end
 -- position here is the only check that you paused on the intended frame.
 local function report_start()
     local x_pos, x_vel = measure()
-    emu.print(string.format("demo_00: depth-first, %d symbols, max depth %d",
+    emu.print(string.format("Demo: depth-first, %d symbols, max depth %d",
         #ALPHABET, MAX_DEPTH))
     emu.print(string.format("anchor: x_pos=%.4f speed=%d  (1-1 start is"
         .. " 40.0000, 0)", x_pos, x_vel))
@@ -304,13 +305,12 @@ end
 
 local function report_progress(evaluated, pruned, frontier)
     local d, k = unwound(frontier)
-    emu.print(string.format("[%d] pruned=%d frontier=%d best=%s (%s)",
+    emu.print(string.format("    (%d) pruned=%d, frontier=%3d, best=%s %s",
         evaluated, pruned, #frontier,
-        best_seq and string.format("%.3f", best_score) or "none", best_branch))
-    emu.print(d and string.format("    unwound to frame %d, on %d of %d: %s",
-            d, k, #ALPHABET, try_status(k))
-        or "    still on first dive")
-    emu.print("    prunes by frame: " .. prune_summary())
+        best_seq and string.format("%.3f", best_score) or "none", best_branch) ..
+        (d and string.format(" |  unwound to frame %d, on %d of %d:  %s ",
+            d, k, #ALPHABET, try_status(k)) or " |  still on first dive ") .. 
+        " |  prunes by frame:  " .. prune_summary())
 end
 
 local function report_done(evaluated, pruned)
