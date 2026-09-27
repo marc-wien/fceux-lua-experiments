@@ -1,5 +1,6 @@
 --
 -- === SMB1 Per-Frame Input Sequence Depth-First Search Demo ===
+-- Variant: string playback, full diagnostics
 --
 -- Depth-first branch-and-bound over per-frame inputs, SMB1 in FCEUX.
 --
@@ -9,18 +10,19 @@
 -- far. At useful depths this does not finish; that is the point of demo 00.
 --
 -- To understand the method, read in this order:
---   Search            the loop: pop, replay, bound, then prune / record / expand
---   Frontier          LIFO pop is what makes it depth-first; a node is a string
---   Replay            plays a string from the anchor, no intermediate savestates
---   Score and bound   when a branch can be dropped, and why that is safe
---   Incumbent         the best confirmed result, which the bound is tested against
+--   Search           the loop: pop, replay, bound, then prune/record/expand
+--   Frontier         LIFO pop is what makes it depth-first; a node is a string
+--   Replay           plays a string from the anchor, no intermediate savestates
+--   Score and bound  when a branch can be dropped, and why that is safe
+--   Incumbent        the best confirmed result: the bar every bound must beat
 -- Settings through Measurement are supporting detail -- though Anchor and
 -- Inputs each hold an FCEUX gotcha that silently corrupts results if missed,
--- so keep both if you adapt this. Diagnostics is reporting only: Replay and
--- Search reach it solely through report_* calls, and it can be skipped
--- entirely on a first read.
+-- so keep both if you adapt this. Diagnostics is reporting only: the
+-- sections above reach it solely through report_* calls, and it can be
+-- skipped entirely on a first read.
 --
--- Setup: Load FCS savestate file with emulator paused, then run this, then unpause
+-- Setup: Load FCS savestate file with emulator paused, then run this, then
+-- unpause.
 --
 
 -- === Settings ===============================================================
@@ -115,8 +117,8 @@ end
 local function ramp_to_cap(v)
     local frames, dist = 0, 0
     while v < MAX_SPEED do
-        v = math.min(v + (math.abs(v) < ACCEL_SWITCH and ACCEL_LOW or ACCEL_HIGH),
-                     MAX_SPEED)
+        local accel = math.abs(v) < ACCEL_SWITCH and ACCEL_LOW or ACCEL_HIGH
+        v = math.min(v + accel, MAX_SPEED)
         dist = dist + v / 16
         frames = frames + 1
     end
@@ -140,8 +142,9 @@ local function check_speed(x_vel)
     min_vel = x_vel
     if x_vel < BOUND_SAFE_MIN_VEL and not vel_warned then
         vel_warned = true
-        emu.print(string.format("WARNING speed %d below %d: bound may be"
-            .. " unsound. Set ACCEL_LOW = ACCEL_HIGH.", x_vel, BOUND_SAFE_MIN_VEL))
+        emu.print(string.format(
+            "WARNING speed %d below %d: bound may be unsound. "
+            .. "Set ACCEL_LOW = ACCEL_HIGH.", x_vel, BOUND_SAFE_MIN_VEL))
     end
 end
 
@@ -178,7 +181,7 @@ local function copy_seq(seq)
 end
 
 -- === Diagnostics ============================================================
--- Reporting only. Replay and Search reach this section solely through the
+-- Reporting only. The search code reaches this section solely through the
 -- report_* functions, and nothing here writes to search state, so any of them
 -- can be stubbed out without changing results.
 
@@ -219,7 +222,7 @@ end
 -- label and %7.3f, so scores align at the decimal (given a monospaced font).
 local best_lines, best_label, best_branch = {}, "BEST YET = none", ""
 
-local function report_replay_start(seq)
+local function report_node_start(seq)
     if not SHOW_LIVE then return nil end
     return { lines = wrap(seq), branch = branch_point(seq) }
 end
@@ -231,9 +234,9 @@ local function report_frame(live, x_pos, x_vel_ub, frame)
     gui.text(4, y, best_label)
     for _, line in ipairs(best_lines) do y = y + 8; gui.text(4, y, line) end
     y = y + 12
-    -- "pruned!" can appear before the replay finishes. It is still exact: the
-    -- ceiling only falls along a replay and the incumbent cannot change until
-    -- the replay ends, so this node is certain to be pruned.
+    -- "pruned!" can appear before the node is judged. It is still exact: the
+    -- ceiling only falls from parent to child, and the incumbent cannot change
+    -- mid-node, so this node is certain to be pruned.
     gui.text(4, y, string.format("MAX POSS = %7.3f  %s %-10s", ceiling,
         live.branch, ceiling > best_score and "testing..." or "pruned!"))
     for _, line in ipairs(live.lines) do y = y + 8; gui.text(4, y, line) end
@@ -296,29 +299,34 @@ local function try_status(k)
     return table.concat(parts, " ")
 end
 
--- Runs before any replay, so the emulator is still on the anchor. Reading
--- position here is the only check that you paused on the intended frame.
+-- Runs before any node is evaluated, so the emulator is still on the anchor.
+-- Reading position here is the only check that you paused on the intended
+-- frame.
 local function report_start()
     local x_pos, x_vel = measure()
-    emu.print(string.format("Demo: depth-first, %d symbols, max depth %d",
-        #ALPHABET, MAX_DEPTH))
+    emu.print(string.format("Demo: %s, %d symbols, max depth %d",
+        "depth-first", #ALPHABET, MAX_DEPTH))
     emu.print(string.format("anchor: x_pos=%.4f speed=%d  (1-1 start is"
         .. " 40.0000, 0)", x_pos, x_vel))
 end
 
 local function report_progress(evaluated, pruned, frontier)
     local d, k = unwound(frontier)
+    local where = " |  still on first dive "
+    if d then
+        where = string.format(" |  unwound to frame %d,  on %d of %d:  %s ",
+            d, k, #ALPHABET, try_status(k))
+    end
     emu.print(string.format("    (%d) best=%s %s, frontier=%3d,  pruned=%d ",
         evaluated, best_seq and string.format("%.3f", best_score) or "none",
-        best_branch, #frontier, pruned) ..
-        (d and string.format(" |  unwound to frame %d,  on %d of %d:  %s ",
-            d, k, #ALPHABET, try_status(k)) or " |  still on first dive ") .. 
-        " |  prunes by frame:  " .. prune_summary())
+        best_branch, #frontier, pruned)
+        .. where .. " |  prunes by frame:  " .. prune_summary())
 end
 
 local function report_done(evaluated, pruned)
-    emu.print(string.format("    done: evaluated=%d, pruned=%d, min_speed=%d" .. 
-        "  |  prunes by frame:  %s", evaluated, pruned, min_vel, prune_summary()))
+    emu.print(string.format("    done: evaluated=%d, pruned=%d, min_speed=%d"
+        .. "  |  prunes by frame:  %s", evaluated, pruned, min_vel,
+        prune_summary()))
     if best_seq then
         -- A node's depth is its string length, so #best_seq is the cap frame.
         emu.print(string.format("| *BEST* | s=%.3f, d=%d | %s",
@@ -332,7 +340,7 @@ end
 -- place the emulator advances during the search.
 local function replay(seq)
     savestate.load(anchor)
-    local live = report_replay_start(seq)
+    local live = report_node_start(seq)
     local x_pos, x_vel, x_vel_ub = measure()
 
     for i = 1, #seq do
