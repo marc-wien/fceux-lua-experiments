@@ -308,10 +308,10 @@ end
 
 local function report_progress(evaluated, pruned, frontier)
     local d, k = unwound(frontier)
-    emu.print(string.format("    (%d) best=%s %s, frontier=%3d, pruned=%d",
+    emu.print(string.format("    (%d) best=%s %s, frontier=%3d,  pruned=%d ",
         evaluated, best_seq and string.format("%.3f", best_score) or "none",
         best_branch, #frontier, pruned) ..
-        (d and string.format(" |  unwound to frame %d, on %d of %d:  %s ",
+        (d and string.format(" |  unwound to frame %d,  on %d of %d:  %s ",
             d, k, #ALPHABET, try_status(k)) or " |  still on first dive ") .. 
         " |  prunes by frame:  " .. prune_summary())
 end
