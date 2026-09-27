@@ -308,11 +308,11 @@ local function band_summary(bands)
     for band = 0, math.floor(MAX_DEPTH / DEPTH_BAND) do
         local c = bands[band]
         if c then
-            parts[#parts + 1] = string.format("%d-%d:%d", band * DEPTH_BAND,
-                band * DEPTH_BAND + DEPTH_BAND - 1, c)
+            parts[#parts + 1] = string.format("%d-%d: %dk", band * DEPTH_BAND,
+                band * DEPTH_BAND + DEPTH_BAND - 1, c/1000)
         end
     end
-    return #parts > 0 and table.concat(parts, " ") or "none"
+    return #parts > 0 and table.concat(parts, ", ") or "none"
 end
 
 local function report_best(new_best, node)
@@ -381,13 +381,13 @@ local function report_progress(evaluated, pruned, dupes, frontier)
     local d, k = unwound(frontier)
     local where = " | still on first dive "
     if d then
-        where = string.format("| on %d, %d of %d: %s",
+        where = string.format("| on %d, %d / %d: %s",
             d, k, #ALPHABET, try_status(k))
     end
-    emu.print(string.format("  (%dk) s=%s %s| frnt=%3d, prun=%d,",
+    emu.print(string.format("  (%dk) s=%s %s| frnt=%3d, prun=%dk,",
         evaluated/1000, best_seq and string.format("%.3f", best_score) or "none",
-        best_branch, #frontier, pruned)
-        .. string.format(" dup=%d ", dupes)
+        best_branch, #frontier, pruned/1000)
+        .. string.format(" dup=%dk ", dupes/1000)
         .. where .. "| prun: " .. band_summary(prunes_by_band)
         .. " | dup: " .. band_summary(dupes_by_band))
 end
