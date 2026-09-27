@@ -49,9 +49,9 @@ local MAX_SEEN = 1000000      -- states remembered for dedup, ~2 KB each (~2 GB
                               -- growing; lower it on a 32-bit FCEUX build
 
 -- Reporting
-local SHOW_LIVE = true        -- draw current and best sequences on screen
-local PROGRESS_EVERY = 1000   -- nodes between console progress lines
-local DEPTH_BAND = 10         -- frames per bucket in the by-frame summaries
+local SHOW_LIVE = false        -- draw current and best sequences on screen
+local PROGRESS_EVERY = 10000   -- nodes between console progress lines
+local DEPTH_BAND = 15         -- frames per bucket in the by-frame summaries
 
 -- === Game constants =========================================================
 
@@ -308,7 +308,7 @@ local function band_summary(bands)
     for band = 0, math.floor(MAX_DEPTH / DEPTH_BAND) do
         local c = bands[band]
         if c then
-            parts[#parts + 1] = string.format("%d-%d: %dk", band * DEPTH_BAND,
+            parts[#parts + 1] = string.format("(%d-%d): %dk", band * DEPTH_BAND,
                 band * DEPTH_BAND + DEPTH_BAND - 1, c/1000)
         end
     end
@@ -346,14 +346,15 @@ end
 -- alphabet is shown as a window around the current one.
 local function try_status(k)
     local first, last = 1, #TRY_ORDER
-    if last > 7 then first, last = math.max(1, k - 1), math.min(last, k + 1) end
+    if last > 7 then first, last = math.max(1, k - 0), math.min(last, k + 0) end
     local parts = {}
-    if first > 1 then parts[#parts + 1] = "." end
+    --if first > 1 then parts[#parts + 1] = "." end
     for i = first, last do
         local s = TRY_ORDER[i]
-        parts[#parts + 1] = (i == k) and ("[" .. s .. "]") or s
+        --parts[#parts + 1] = (i == k) and ("[" .. s .. "]") or s
+        parts[#parts + 1] = s
     end
-    if last < #TRY_ORDER then parts[#parts + 1] = "." end
+    --if last < #TRY_ORDER then parts[#parts + 1] = "." end
     return table.concat(parts, " ")
 end
 
@@ -381,12 +382,12 @@ local function report_progress(evaluated, pruned, dupes, frontier)
     local d, k = unwound(frontier)
     local where = " | still on first dive "
     if d then
-        where = string.format("| on %d, %d / %d: %s",
+        where = string.format("| on @%d, %d / %d: %-3s",
             d, k, #ALPHABET, try_status(k))
     end
-    emu.print(string.format("  (%dk) s=%s %s| frnt=%3d, prun=%dk,",
+    emu.print(string.format("  (%dk) s=%s %s| frnt=%.1fk, prun=%dk,",
         evaluated/1000, best_seq and string.format("%.3f", best_score) or "none",
-        best_branch, #frontier, pruned/1000)
+        best_branch, #frontier/1000, pruned/1000)
         .. string.format(" dup=%dk ", dupes/1000)
         .. where .. "| prun: " .. band_summary(prunes_by_band)
         .. " | dup: " .. band_summary(dupes_by_band))
