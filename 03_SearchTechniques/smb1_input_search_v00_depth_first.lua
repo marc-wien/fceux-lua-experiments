@@ -188,7 +188,7 @@ end
 local TRY_ORDER = {}
 for i = #ALPHABET, 1, -1 do TRY_ORDER[#TRY_ORDER + 1] = ALPHABET[i] end
 
-local CHARS_PER_LINE = 36
+local CHARS_PER_LINE = 49
 
 local function wrap(seq)
     local lines, line = {}, ""
@@ -208,7 +208,7 @@ end
 -- Where a sequence first leaves the default path (TRY_ORDER[1] every frame).
 local function branch_point(seq)
     for i, s in ipairs(seq) do
-        if s ~= TRY_ORDER[1] then return string.format("@%d %s", i, s) end
+        if s ~= TRY_ORDER[1] then return string.format("@%02d=%-3s", i, s) end
     end
     return "all " .. TRY_ORDER[1]
 end
@@ -227,8 +227,8 @@ local function report_frame(live, x_pos, x_vel_ub, frame)
     if not live then return end
     local ceiling = bound(x_pos, x_vel_ub, frame)
     local y = 32
-    gui.text(4, y, string.format("ceil %8.3f  %-6s %s", ceiling,
-        ceiling > best_score and "viable" or "prune!", live.branch))
+    gui.text(4, y, string.format("MAX POSS = %7.3f  %s  %-6s", ceiling,
+        live.branch, ceiling > best_score and "testing" or "prune!"))
     for _, line in ipairs(live.lines) do y = y + 8; gui.text(4, y, line) end
     y = y + 12
     gui.text(4, y, best_label)
@@ -259,8 +259,8 @@ end
 local function report_best(new_best, node)
     best_lines = wrap(node.seq)
     best_branch = branch_point(node.seq)
-    best_label = string.format("best %8.3f  d=%-3d %s", new_best, node.depth,
-        best_branch)
+    best_label = string.format("BEST YET = %7.3f  %s  %-2d frames", new_best,
+        best_branch, node.depth)
     emu.print(string.format("BEST d=%-3d score=%8.3f | %s",
         node.depth, new_best, table.concat(node.seq, ",")))
 end
