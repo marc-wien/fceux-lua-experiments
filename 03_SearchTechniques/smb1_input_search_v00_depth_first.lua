@@ -64,10 +64,9 @@ emu.speedmode("nothrottle")   -- all non-"normal" modes behave the same here
 
 -- === Inputs =================================================================
 
--- RTA set (no L+R), B held throughout. Names are padded to three characters so
--- printed sequences line up. The stack is LIFO, so the LAST symbol leads every
--- dive. The opening dive has to reach the cap to form the first incumbent --
--- RB last does that by "just running right". Nothing prunes before it.
+-- RTA set (no L+R), B held throughout. The stack is LIFO, so the LAST symbol
+-- leads every dive. The opening dive has to reach the cap to form the first
+-- incumbent. RB last does that by "running right". Nothing prunes before it.
 local ALPHABET = { "B", "LBA", "LB", "RBA", "RB" }
 
 -- Every button must be set true OR false: an omitted button means "leave it
