@@ -42,11 +42,18 @@ local ALLOW_LR = false        -- allow Left+Right pressed together
 local ALLOW_UD = false        -- allow Up+Down pressed together
 
 -- Memory
-local GC_EVERY = 10000        -- savestates created between full collections;
-                              -- lower it if memory climbs on long runs
-local MAX_SEEN = 1000000      -- states remembered for dedup, ~2 KB each (~2 GB
-                              -- at the cap). Hitting it only stops dedup from
-                              -- growing; lower it on a 32-bit FCEUX build
+local GC_EVERY = 50000        -- savestates created between full collections;
+                              -- lower it if memory climbs on long runs. With a
+                              -- big dedup table this also matters: left alone,
+                              -- Lua waits for memory to double before it
+                              -- collects, which here could mean gigabytes of
+                              -- garbage. Do not raise it much.
+local MAX_SEEN = 10000000     -- states remembered for dedup, ~2 GB per
+                              -- million (~12 GB at the cap): sized for a 16 GB
+                              -- machine with little else running. Hitting it
+                              -- only stops dedup from growing -- the progress
+                              -- line shows "full: 1" -- and the search stays
+                              -- exact. Lower it if memory nears the limit.
 
 -- Reporting
 local SHOW_LIVE = false        -- draw current and best sequences on screen
@@ -378,7 +385,7 @@ local function report_seen_full()
         .. " but no longer remembering new ones", MAX_SEEN))
 end
 
-local function report_progress(evaluated, pruned, dupes, frontier)
+local function report_progress(evaluated, pruned, dupes, frontier, seen_count)
     local d, k = unwound(frontier)
     local where = " | still on first dive "
     if d then
@@ -388,7 +395,8 @@ local function report_progress(evaluated, pruned, dupes, frontier)
     emu.print(string.format("  (%dk) s=%s %s| frnt=%.1fk, prun=%dk,",
         evaluated/1000, best_seq and string.format("%.3f", best_score) or "none",
         best_branch, #frontier/1000, pruned/1000)
-        .. string.format(" dup=%dk ", dupes/1000)
+        .. string.format(" dup=%dk, full: %d ", dupes/1000,
+            seen_count >= MAX_SEEN and 1 or 0)
         .. where .. "| prun: " .. band_summary(prunes_by_band)
         .. " | dup: " .. band_summary(dupes_by_band))
 end
@@ -536,7 +544,7 @@ while true do
     end
 
     if evaluated % PROGRESS_EVERY == 0 then
-        report_progress(evaluated, pruned, dupes, frontier)
+        report_progress(evaluated, pruned, dupes, frontier, seen_count)
     end
 end
 
