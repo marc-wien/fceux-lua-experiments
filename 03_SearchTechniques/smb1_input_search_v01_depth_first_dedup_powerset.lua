@@ -42,13 +42,13 @@ local ALLOW_LR = false        -- allow Left+Right pressed together
 local ALLOW_UD = false        -- allow Up+Down pressed together
 
 -- Memory
-local GC_EVERY = 50000        -- savestates created between full collections;
+local GC_EVERY = 100000       -- savestates created between full collections;
                               -- lower it if memory climbs on long runs. With a
                               -- big dedup table this also matters: left alone,
                               -- Lua waits for memory to double before it
                               -- collects, which here could mean gigabytes of
                               -- garbage. Do not raise it much.
-local MAX_SEEN = 10000000     -- states remembered for dedup, ~2 GB per
+local MAX_SEEN = 20000000     -- states remembered for dedup, ~2 GB per
                               -- million (~12 GB at the cap): sized for a 16 GB
                               -- machine with little else running. Hitting it
                               -- only stops dedup from growing -- the progress
@@ -56,9 +56,11 @@ local MAX_SEEN = 10000000     -- states remembered for dedup, ~2 GB per
                               -- exact. Lower it if memory nears the limit.
 
 -- Reporting
-local SHOW_LIVE = false        -- draw current and best sequences on screen
-local PROGRESS_EVERY = 10000   -- nodes between console progress lines
+local SHOW_LIVE = false       -- draw current and best sequences on screen
+local PROGRESS_EVERY = 10000  -- nodes between console progress lines
 local DEPTH_BAND = 10         -- frames per bucket in the by-frame summaries
+local UNWOUND_LEVELS = 3      -- depths shown after "on @": the unwound frame
+                              -- and the frames just below it
 
 -- === Game constants =========================================================
 
@@ -264,7 +266,7 @@ local SYM_WIDTH = 3
 local function branch_point(seq)
     for i, s in ipairs(seq) do
         if s ~= TRY_ORDER[1] then
-            return string.format("@%02d=%-" .. SYM_WIDTH .. "s", i, s)
+            return string.format("@%02d:%-" .. SYM_WIDTH .. "s", i, s)
         end
     end
     return string.format("%-" .. (SYM_WIDTH + 4) .. "s", "(init)")
@@ -315,7 +317,7 @@ local function band_summary(bands)
     for band = 0, math.floor(MAX_DEPTH / DEPTH_BAND) do
         local c = bands[band]
         if c then
-            parts[#parts + 1] = string.format("(%d-%d): %dk", band * DEPTH_BAND,
+            parts[#parts + 1] = string.format("(%d-%d):%dk", band * DEPTH_BAND,
                 band * DEPTH_BAND + DEPTH_BAND - 1, c/1000)
         end
     end
@@ -334,7 +336,11 @@ end
 -- The stack holds, for each depth on the current path, the siblings not yet
 -- tried: #ALPHABET - 1 of them until backtracking reaches that depth. The
 -- shallowest depth holding fewer is how far up the tree the search has
--- unwound. DFS-specific: best-first has no single current path.
+-- unwound. The same counts give the alternative in use at each depth below
+-- it, for as far as the current path reaches: a depth whose siblings were
+-- just pushed has none in use yet, and the path ends there. Returns the
+-- unwound depth and the alternatives in use at up to UNWOUND_LEVELS depths.
+-- DFS-specific: best-first has no single current path.
 local function unwound(frontier)
     local count, deepest = {}, 0
     for _, n in ipairs(frontier) do
@@ -342,27 +348,17 @@ local function unwound(frontier)
         if n.depth > deepest then deepest = n.depth end
     end
     for d = 1, deepest do
-        local left = count[d] or 0
-        if left < #ALPHABET - 1 then return d, #ALPHABET - left end
+        if (count[d] or 0) < #ALPHABET - 1 then
+            local in_use = {}
+            for depth = d, d + UNWOUND_LEVELS - 1 do
+                local left = count[depth] or 0
+                if depth > deepest or left >= #ALPHABET then break end
+                in_use[#in_use + 1] = #ALPHABET - left
+            end
+            return d, in_use
+        end
     end
     return nil
-end
-
--- Alternatives at one depth in try order, current one bracketed: those to its
--- left are exhausted, those to its right are still on the stack. A long
--- alphabet is shown as a window around the current one.
-local function try_status(k)
-    local first, last = 1, #TRY_ORDER
-    if last > 7 then first, last = math.max(1, k - 0), math.min(last, k + 0) end
-    local parts = {}
-    --if first > 1 then parts[#parts + 1] = "." end
-    for i = first, last do
-        local s = TRY_ORDER[i]
-        --parts[#parts + 1] = (i == k) and ("[" .. s .. "]") or s
-        parts[#parts + 1] = s
-    end
-    --if last < #TRY_ORDER then parts[#parts + 1] = "." end
-    return table.concat(parts, " ")
 end
 
 -- Runs before any node is evaluated, so the emulator is still on the anchor.
@@ -386,19 +382,24 @@ local function report_seen_full()
 end
 
 local function report_progress(evaluated, pruned, dupes, frontier, seen_count)
-    local d, k = unwound(frontier)
+    local d, in_use = unwound(frontier)
     local where = " | still on first dive "
     if d then
-        where = string.format("| on @%d, %02d/%02d: %-3s",
-            d, k, #ALPHABET, try_status(k))
+        local nums, syms = {}, {}
+        for i, k in ipairs(in_use) do
+            nums[i] = string.format("%02d", k)
+            syms[i] = TRY_ORDER[k]
+        end
+        where = string.format("| on:@%d %s/%02d: %-3s ", d,
+            table.concat(nums, ":"), #ALPHABET, syms[1]) --table.concat(syms, ":"))
     end
-    emu.print(string.format("  (%dk) s=%s %s| frnt=%.1fk, prun=%dk,",
-        evaluated/1000, best_seq and string.format("%.3f", best_score) or "none",
+    emu.print(string.format("  (%.1fM) s:%s %s| frnt:%.1fk, prun:%dk,",
+        evaluated/1000000, best_seq and string.format("%.3f", best_score) or "none",
         best_branch, #frontier/1000, pruned/1000)
-        .. string.format(" dup=%dk, full:%d ", dupes/1000,
+        .. string.format(" dup:%dk, full:%d ", dupes/1000,
             seen_count >= MAX_SEEN and 1 or 0)
-        .. where .. "| prun: " .. band_summary(prunes_by_band)
-        .. " | dup: " .. band_summary(dupes_by_band))
+        .. where .. "| p: " .. band_summary(prunes_by_band)
+        .. " | d: " .. band_summary(dupes_by_band))
 end
 
 local function report_done(evaluated, pruned, dupes)
