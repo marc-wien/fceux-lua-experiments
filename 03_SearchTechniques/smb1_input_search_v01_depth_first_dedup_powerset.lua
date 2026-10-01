@@ -390,13 +390,13 @@ local function report_progress(evaluated, pruned, dupes, frontier, seen_count)
             nums[i] = string.format("%02d", k)
             syms[i] = TRY_ORDER[k]
         end
-        where = string.format("| on:@%d %s/%02d: %-3s ", d,
-            table.concat(nums, ":"), #ALPHABET, syms[1]) --table.concat(syms, ":"))
+        where = string.format("| on:@%d, %s /%02d, %s ", d,
+            table.concat(nums, ":"), #ALPHABET, table.concat(syms, ":"))  --syms[1])
     end
-    emu.print(string.format("  (%.1fM) s:%s %s| frnt:%.1fk, prun:%dk,",
+    emu.print(string.format("  (%.1fM) s:%s %s| frnt:%.1fk, prun:%.1fM,",
         evaluated/1000000, best_seq and string.format("%.3f", best_score) or "none",
-        best_branch, #frontier/1000, pruned/1000)
-        .. string.format(" dup:%dk, full:%d ", dupes/1000,
+        best_branch, #frontier/1000, pruned/1000000)
+        .. string.format(" dup:%.1fM, full:%d ", dupes/1000000,
             seen_count >= MAX_SEEN and 1 or 0)
         .. where .. "| p: " .. band_summary(prunes_by_band)
         .. " | d: " .. band_summary(dupes_by_band))
