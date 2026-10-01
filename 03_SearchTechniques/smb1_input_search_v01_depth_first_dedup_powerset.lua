@@ -52,7 +52,7 @@ local MAX_SEEN = 10000000     -- states remembered for dedup, ~2 GB per
                               -- million (~12 GB at the cap): sized for a 16 GB
                               -- machine with little else running. Hitting it
                               -- only stops dedup from growing -- the progress
-                              -- line shows "full: 1" -- and the search stays
+                              -- line shows "full:1" -- and the search stays
                               -- exact. Lower it if memory nears the limit.
 
 -- Reporting
@@ -389,13 +389,13 @@ local function report_progress(evaluated, pruned, dupes, frontier, seen_count)
     local d, k = unwound(frontier)
     local where = " | still on first dive "
     if d then
-        where = string.format("| on @%d, %d / %d: %-3s",
+        where = string.format("| on @%d, %02d/%02d: %-3s",
             d, k, #ALPHABET, try_status(k))
     end
     emu.print(string.format("  (%dk) s=%s %s| frnt=%.1fk, prun=%dk,",
         evaluated/1000, best_seq and string.format("%.3f", best_score) or "none",
         best_branch, #frontier/1000, pruned/1000)
-        .. string.format(" dup=%dk, full: %d ", dupes/1000,
+        .. string.format(" dup=%dk, full:%d ", dupes/1000,
             seen_count >= MAX_SEEN and 1 or 0)
         .. where .. "| prun: " .. band_summary(prunes_by_band)
         .. " | dup: " .. band_summary(dupes_by_band))
