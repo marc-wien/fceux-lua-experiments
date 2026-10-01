@@ -394,7 +394,7 @@ local function report_progress(evaluated, pruned, dupes, frontier, seen_count)
             table.concat(nums, ":"), #ALPHABET, table.concat(syms, ":"))  --syms[1])
     end
     emu.print(string.format("  (%.1fM) s:%s %s| frnt:%.1fk, prun:%.1fM,",
-        evaluated/1000000, best_seq and string.format("%.3f", best_score) or "none",
+        evaluated/1000000, best_seq and string.format("%.1f", best_score) or "none",
         best_branch, #frontier/1000, pruned/1000000)
         .. string.format(" dup:%.1fM, full:%d ", dupes/1000000,
             seen_count >= MAX_SEEN and 1 or 0)
