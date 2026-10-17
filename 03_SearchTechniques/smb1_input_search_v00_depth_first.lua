@@ -33,6 +33,10 @@ local MAX_DEPTH = 50          -- longest input string tried. The opening dive
                               -- (the last ALPHABET symbol, every frame) must
                               -- reach the cap within this, or no incumbent ever
                               -- forms and nothing is pruned. RB caps ~frame 45.
+local USE_RAM_RULE = false    -- true: read RunningSpeed, $0700 and the speed
+                              -- byte to use 304 below speed 25 when the latch
+                              -- is out of play (see slow_rate). false: the
+                              -- bound reads speed alone.
 
 -- Reporting
 local SHOW_LIVE = true        -- draw current and best sequences on screen
@@ -140,22 +144,24 @@ local function bound(x_pos, x_vel_ub, frame, accel_slow)
     return score(x_pos + dist, frame + frames)
 end
 
--- Optional, off for now: read RAM to use 304 below 25. 416 needs the
+-- Optional (USE_RAM_RULE): read RAM to use 304 below 25. 416 needs the
 -- RunningSpeed latch, which only sets at |speed| >= 28. Moving right, the
 -- ramp is at the top rate by then; moving left, a run into the screen edge
 -- can latch it at speed 0 -- hence the speed >= 0 test. Checked in two
--- models and against the ROM in random play. To use it, uncomment it and
--- pass slow_rate() as bound()'s last argument wherever a node's ceiling is
--- computed, while the emulator still holds that node's state.
---
--- local ACCEL_WALK = 304 / 256  -- $98 x2: below 25, latch clear
--- local function slow_rate()
---     local latch_clear = memory.readbyte(0x0703) == 0     -- RunningSpeed
---     local abs_low = memory.readbyte(0x0700) < 25         -- can be stale
---     local not_left = memory.readbytesigned(0x0057) >= 0
---     return (latch_clear and abs_low and not_left) and ACCEL_WALK
---         or ACCEL_SLOW
--- end
+-- models and against the ROM in random play.
+local ACCEL_WALK = 304 / 256  -- $98 x2: below 25, latch clear
+local function slow_rate()
+    local latch_clear = memory.readbyte(0x0703) == 0     -- RunningSpeed
+    local abs_low = memory.readbyte(0x0700) < 25         -- can be stale
+    local not_left = memory.readbytesigned(0x0057) >= 0
+    return (latch_clear and abs_low and not_left) and ACCEL_WALK or ACCEL_SLOW
+end
+
+-- The slow rate for the state the emulator holds right now: slow_rate()
+-- with USE_RAM_RULE, otherwise always ACCEL_SLOW (speed alone).
+local function current_slow_rate()
+    return USE_RAM_RULE and slow_rate() or ACCEL_SLOW
+end
 
 -- === Incumbent ==============================================================
 
@@ -242,7 +248,8 @@ end
 -- carries from parent to child.
 local function report_frame(live, x_pos, x_vel_ub, frame)
     if not live then return end
-    live.ceiling = math.min(live.ceiling, bound(x_pos, x_vel_ub, frame))
+    live.ceiling = math.min(live.ceiling,
+        bound(x_pos, x_vel_ub, frame, current_slow_rate()))
     local ceiling = live.ceiling
     local y = 34
     gui.text(4, y, best_label)
@@ -318,8 +325,9 @@ end
 -- frame.
 local function report_start()
     local x_pos, x_vel = measure()
-    emu.print(string.format("Demo: %s, %d symbols, max depth %d",
-        "depth-first", #ALPHABET, MAX_DEPTH))
+    emu.print(string.format("Demo: %s, %d symbols, max depth %d, bound: %s",
+        "depth-first", #ALPHABET, MAX_DEPTH,
+        USE_RAM_RULE and "speed + RAM rule" or "speed only"))
     emu.print(string.format("anchor: x_pos=%.4f speed=%d  (1-1 start is"
         .. " 40.0000, 0)", x_pos, x_vel))
 end
@@ -380,9 +388,11 @@ while true do
     evaluated = evaluated + 1
     -- A node can do no better than its parent could: both ceilings bound the
     -- same continuations, so keep the smaller. Every ramp restarts with fresh
-    -- free frames, so without this a child's ceiling could rise.
-    local ceiling = math.min(bound(x_pos, x_vel_ub, node.depth),
-                             node.parent_ceiling)
+    -- free frames, so without this a child's ceiling could rise. The
+    -- emulator still holds this node's state, which current_slow_rate reads.
+    local ceiling = math.min(
+        bound(x_pos, x_vel_ub, node.depth, current_slow_rate()),
+        node.parent_ceiling)
 
     if ceiling <= best_score then
         -- Cannot beat the incumbent even at best case; <= also drops ties.
