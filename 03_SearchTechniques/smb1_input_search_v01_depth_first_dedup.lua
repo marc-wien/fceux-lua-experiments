@@ -38,13 +38,24 @@ local MAX_DEPTH = 50          -- longest input string tried. The opening dive
                               -- (the last ALPHABET symbol, every frame) must
                               -- reach the cap within this, or no incumbent ever
                               -- forms and nothing is pruned. RB caps ~frame 45.
+local USE_RAM_RULE = true     -- true: read RunningSpeed, $0700 and the speed
+                              -- byte to use 304 below speed 25 when the latch
+                              -- is out of play (see slow_rate). false: the
+                              -- bound reads speed alone.
 
 -- Memory
-local GC_EVERY = 5000         -- savestates created between full collections;
-                              -- lower it if memory climbs on long runs
-local MAX_SEEN = 1000000      -- states remembered for dedup, ~2 KB each (~2 GB
-                              -- at the cap). Hitting it only stops dedup from
-                              -- growing; lower it on a 32-bit FCEUX build
+local GC_EVERY = 100000       -- savestates created between full collections;
+                              -- lower it if memory climbs on long runs. With a
+                              -- big dedup table this also matters: left alone,
+                              -- Lua waits for memory to double before it
+                              -- collects, which here could mean gigabytes of
+                              -- garbage. Do not raise it much.
+local MAX_SEEN = 11000000     -- states remembered for dedup, about 2.15 KB
+                              -- each (~24 GB at the cap): sized for a 32 GB
+                              -- machine with little else running. Hitting it
+                              -- only stops dedup from growing, and the search
+                              -- stays exact. Lower it if memory nears the
+                              -- limit.
 
 -- Reporting
 local SHOW_LIVE = true        -- draw current and best sequences on screen
@@ -53,16 +64,16 @@ local DEPTH_BAND = 10         -- frames per bucket in the by-frame summaries
 
 -- === Game constants =========================================================
 
-local MAX_SPEED = 40          -- x speed cap, in 1/16 px/frame; needs B held
+local MAX_SPEED = 40          -- x speed cap while running, in 1/16 px/frame
 local PX_PER_FRAME_AT_CAP = MAX_SPEED / 16
 
--- Fastest acceleration the game can produce, in speed units per frame:
--- FrictionData doubled (facing ~= moving), chosen on |speed| < 25.
-local ACCEL_LOW, ACCEL_HIGH, ACCEL_SWITCH = 304 / 256, 456 / 256, 25
-
--- The bound is only monotone for speed >= -24.5, and pruning relies on that.
--- Checked at runtime rather than assumed.
-local BOUND_SAFE_MIN_VEL = -24
+-- Fastest acceleration the game allows, in speed units per frame. Each is
+-- a FrictionData entry, doubled when facing ~= moving direction.
+local ACCEL_RUN  = 456 / 256  -- $E4 x2: running, or airborne at 25+
+local ACCEL_SLOW = 416 / 256  -- $D0 x2: below 25, RunningSpeed latch set
+local ACCEL_SWITCH = 25       -- speed where the top rate opens up
+local FREE_FRAMES = 2         -- top-rate bursts a state can hold in reserve
+local EDGE_PX = 15 / 16       -- most the left screen edge can lift Mario
 
 -- === Anchor =================================================================
 
@@ -105,8 +116,9 @@ local INPUT = {
 -- === Measurement ============================================================
 
 -- x_vel is the exact speed byte, used to detect the cap. x_vel_ub adds the
--- 0x0705 accumulator, an unsigned byte, so it is never below true speed --
--- the bound must never understate a branch.
+-- 0x0705 fraction, giving the full 16-bit speed. Mario moves by the byte
+-- alone, so x_vel_ub is never below the speed that moves him -- the bound
+-- must never understate a branch.
 local function measure()
     local x_pos = memory.readbyte(0x006D) * 256      -- page
                 + memory.readbyte(0x0086)            -- pixel
@@ -125,39 +137,49 @@ local function score(x_pos, frame)
 end
 
 -- Best-case ramp to cap from speed v: accelerate, then move, each frame.
--- That ordering is the most generous, so distance is never understated.
-local function ramp_to_cap(v)
+--   max(v, 0): the game can zero a negative speed at once (skid reset,
+--     screen edge), and no negative speed beats 0.
+--   FREE_FRAMES: a state can hold two bursts in reserve (double charge),
+--     so the first two frames get the top rate at any speed.
+--   EDGE_PX: the left edge can lift Mario up to 15/16 px with no speed,
+--     so the first move counts at least that much.
+local function ramp_to_cap(v, accel_slow)
+    v = math.max(v, 0)
     local frames, dist = 0, 0
     while v < MAX_SPEED do
-        local accel = math.abs(v) < ACCEL_SWITCH and ACCEL_LOW or ACCEL_HIGH
-        v = math.min(v + accel, MAX_SPEED)
-        dist = dist + v / 16
         frames = frames + 1
+        local top = frames <= FREE_FRAMES or v >= ACCEL_SWITCH
+        v = math.min(v + (top and ACCEL_RUN or accel_slow), MAX_SPEED)
+        dist = dist + (frames == 1 and math.max(v / 16, EDGE_PX) or v / 16)
     end
     return frames, dist
 end
 
 -- Upper bound on the score any continuation of this state can reach. If it
 -- cannot beat the incumbent, nothing below this node can either.
-local function bound(x_pos, x_vel_ub, frame)
+local function bound(x_pos, x_vel_ub, frame, accel_slow)
     if x_vel_ub >= MAX_SPEED then return score(x_pos, frame) end
-    local frames, dist = ramp_to_cap(x_vel_ub)
+    local frames, dist = ramp_to_cap(x_vel_ub, accel_slow or ACCEL_SLOW)
     return score(x_pos + dist, frame + frames)
 end
 
--- Soundness guard, not reporting: warns once if speed leaves the range where
--- the bound is monotone, because pruning would then be unsafe.
-local min_vel, vel_warned = math.huge, false
+-- Optional (USE_RAM_RULE): read RAM to use 304 below 25. 416 needs the
+-- RunningSpeed latch, which only sets at |speed| >= 28. Moving right, the
+-- ramp is at the top rate by then; moving left, a run into the screen edge
+-- can latch it at speed 0 -- hence the speed >= 0 test. Checked in two
+-- models and against the ROM in random play.
+local ACCEL_WALK = 304 / 256  -- $98 x2: below 25, latch clear
+local function slow_rate()
+    local latch_clear = memory.readbyte(0x0703) == 0     -- RunningSpeed
+    local abs_low = memory.readbyte(0x0700) < 25         -- can be stale
+    local not_left = memory.readbytesigned(0x0057) >= 0
+    return (latch_clear and abs_low and not_left) and ACCEL_WALK or ACCEL_SLOW
+end
 
-local function check_speed(x_vel)
-    if x_vel >= min_vel then return end
-    min_vel = x_vel
-    if x_vel < BOUND_SAFE_MIN_VEL and not vel_warned then
-        vel_warned = true
-        emu.print(string.format(
-            "WARNING speed %d below %d: bound may be unsound. "
-            .. "Set ACCEL_LOW = ACCEL_HIGH.", x_vel, BOUND_SAFE_MIN_VEL))
-    end
+-- The slow rate for the state the emulator holds right now: slow_rate()
+-- with USE_RAM_RULE, otherwise always ACCEL_SLOW (speed alone).
+local function current_slow_rate()
+    return USE_RAM_RULE and slow_rate() or ACCEL_SLOW
 end
 
 -- === Incumbent ==============================================================
@@ -234,21 +256,27 @@ end
 -- label and %7.3f, so scores align at the decimal (given a monospaced font).
 local best_lines, best_label, best_branch = {}, "BEST YET = none", ""
 
-local function report_node_start(seq)
+-- `ceiling` is the parent's, when the caller has it.
+local function report_node_start(seq, ceiling)
     if not SHOW_LIVE then return nil end
-    return { lines = wrap(seq), branch = branch_point(seq) }
+    return { lines = wrap(seq), branch = branch_point(seq),
+             ceiling = ceiling or math.huge }
 end
 
+-- Shows the smallest ceiling along the path so far, the same value Search
+-- carries from parent to child.
 local function report_frame(live, x_pos, x_vel_ub, frame)
     if not live then return end
-    local ceiling = bound(x_pos, x_vel_ub, frame)
+    live.ceiling = math.min(live.ceiling,
+        bound(x_pos, x_vel_ub, frame, current_slow_rate()))
+    local ceiling = live.ceiling
     local y = 34
     gui.text(4, y, best_label)
     for _, line in ipairs(best_lines) do y = y + 8; gui.text(4, y, line) end
     y = y + 12
-    -- "pruned!" can appear before the node is judged. It is still exact: the
-    -- ceiling only falls from parent to child, and the incumbent cannot change
-    -- mid-node, so this node is certain to be pruned.
+    -- "pruned!" can appear before the node is judged. It is still exact: a
+    -- node's ceiling never exceeds its parent's (see Search), and the
+    -- incumbent cannot change mid-node, so this node is certain to be pruned.
     gui.text(4, y, string.format("MAX POSS = %7.3f  %s %-10s", ceiling,
         live.branch, ceiling > best_score and "testing..." or "pruned!"))
     for _, line in ipairs(live.lines) do y = y + 8; gui.text(4, y, line) end
@@ -322,8 +350,9 @@ end
 -- frame.
 local function report_start()
     local x_pos, x_vel = measure()
-    emu.print(string.format("Demo: %s, %d symbols, max depth %d",
-        "depth-first with savestates and dedup", #ALPHABET, MAX_DEPTH))
+    emu.print(string.format("Demo: %s, %d symbols, max depth %d, bound: %s",
+        "depth-first with savestates and dedup", #ALPHABET, MAX_DEPTH,
+        USE_RAM_RULE and "speed + RAM rule" or "speed only"))
     emu.print(string.format("anchor: x_pos=%.4f speed=%d  (1-1 start is"
         .. " 40.0000, 0)", x_pos, x_vel))
 end
@@ -351,9 +380,9 @@ local function report_progress(evaluated, pruned, dupes, frontier)
 end
 
 local function report_done(evaluated, pruned, dupes)
-    emu.print(string.format("    done: evaluated=%d, pruned=%d, dupes=%d,"
-        .. " min_speed=%d  |  prunes by frame:  %s  |  dupes by frame:  %s",
-        evaluated, pruned, dupes, min_vel, band_summary(prunes_by_band),
+    emu.print(string.format("    done: evaluated=%d, pruned=%d, dupes=%d"
+        .. "  |  prunes by frame:  %s  |  dupes by frame:  %s",
+        evaluated, pruned, dupes, band_summary(prunes_by_band),
         band_summary(dupes_by_band)))
     if best_seq then
         -- A node's depth is its string length, so #best_seq is the cap frame.
@@ -376,7 +405,6 @@ local function replay(seq)
         report_frame(live, x_pos, x_vel_ub, i - 1)  -- state before this input
         emu.frameadvance()
         x_pos, x_vel, x_vel_ub = measure()
-        check_speed(x_vel)
     end
     return x_pos, x_vel, x_vel_ub
 end
@@ -415,7 +443,7 @@ end
 -- own input: one frame, however deep the node is.
 local function step(node)
     savestate.load(node.from)
-    local live = report_node_start(node.seq)
+    local live = report_node_start(node.seq, node.parent_ceiling)
     local x_pos, x_vel, x_vel_ub = measure()
 
     if node.depth > 0 then
@@ -423,7 +451,6 @@ local function step(node)
         report_frame(live, x_pos, x_vel_ub, node.depth - 1)  -- parent's state
         emu.frameadvance()
         x_pos, x_vel, x_vel_ub = measure()
-        check_speed(x_vel)
     end
     return x_pos, x_vel, x_vel_ub
 end
@@ -440,8 +467,11 @@ end
 local seen, seen_count = {}, 0
 
 -- True if an identical state was already expanded; otherwise remembers this
--- one, which is about to be. Pruned and capped nodes never get this far: a
--- twin of either would fail the same test again, so they need no entry.
+-- one, which is about to be. Pruned and capped nodes never get this far, so
+-- they need no entry. A capped twin caps again. A pruned twin has the same
+-- own bound and meets a bar at least as high, so it is pruned again -- unless
+-- its path's ceiling is looser than the first one's, and then it is simply
+-- searched: wasted work, never a wrong result.
 local function explored_before(node)
     local key = node.depth .. ":" .. memory.readbyterange(0, 0x800)
     if seen[key] then return true end
@@ -456,7 +486,8 @@ end
 -- === Search =================================================================
 
 local frontier = {}
-push_node(frontier, { seq = {}, depth = 0, from = anchor })
+push_node(frontier, { seq = {}, depth = 0, from = anchor,
+    parent_ceiling = math.huge })
 local evaluated, pruned, dupes = 0, 0, 0
 report_start()
 
@@ -466,18 +497,26 @@ while true do
 
     local x_pos, x_vel, x_vel_ub = step(node)
     evaluated = evaluated + 1
-    local ceiling = bound(x_pos, x_vel_ub, node.depth)
+    -- A node can do no better than its parent could: both ceilings bound the
+    -- same continuations, so keep the smaller. Every ramp restarts with fresh
+    -- free frames, so without this a child's ceiling could rise. The
+    -- emulator still holds this node's state, which current_slow_rate reads.
+    local ceiling = math.min(
+        bound(x_pos, x_vel_ub, node.depth, current_slow_rate()),
+        node.parent_ceiling)
 
     if ceiling <= best_score then
         -- Cannot beat the incumbent even at best case; <= also drops ties.
         pruned = pruned + 1
         report_prune(node)
     elseif x_vel == MAX_SPEED then
-        -- At cap the ceiling IS the achieved score, not an estimate. Capped
-        -- nodes are terminal, so no ancestor can already have capped.
+        -- At cap the score is achieved, not an estimate. Record it, not the
+        -- ceiling: only an achieved score may set the incumbent. Capped nodes
+        -- are terminal, so no ancestor can already have capped.
         verify(node, x_pos, x_vel)
-        best_score, best_seq = ceiling, node.seq
-        report_best(ceiling, node)
+        local achieved = score(x_pos, node.depth)
+        best_score, best_seq = achieved, node.seq
+        report_best(achieved, node)
     elseif explored_before(node) then
         -- Same frame and RAM as a state already expanded: same subtree.
         dupes = dupes + 1
@@ -488,7 +527,7 @@ while true do
             local child = copy_seq(node.seq)
             child[#child + 1] = sym
             push_node(frontier, { seq = child, depth = node.depth + 1,
-                from = state })
+                from = state, parent_ceiling = ceiling })
         end
     end
 
