@@ -1,4 +1,4 @@
-local PROJECT_TO_FRAME          = 1000          -- frame you want the bound for
+local PROJECT_TO_FRAME          = 0             -- target frame; 0 gives a frame-normalized score
 local MAX_SPEED                 = 40            -- $57 never exceeds $28
 local PX_PER_FRAME_AT_MAX_SPEED = MAX_SPEED / 16 -- 2.5
 local WALK_MAX                  = 24            -- walking cap; below it, only walk adders sustain
@@ -18,6 +18,7 @@ local function get_xvel()
 end
 
 local function max_position_at_frame(frame)
+  -- If PROJECT_TO_FRAME < frame, this subtracts max-speed travel instead of adding it.
   return get_xpos() + (PROJECT_TO_FRAME - frame) * PX_PER_FRAME_AT_MAX_SPEED
 end
 
@@ -28,14 +29,14 @@ local function qualifies_for_slower_ramp()
      and rbs(0x0057) >= 0          -- not moving left (running left can latch $0703)
 end
 
--- Fastest possible ramp from speed v up to max speed, cut off at frame_limit.
+-- Fastest possible ramp from speed v up to max speed.
 -- Returns the distance (px) covered while below max speed, and how many frames that took.
-local function ramp_to_max_speed(v, slower, frame_limit)
+local function ramp_to_max_speed(v, slower)
   local walk_accel = slower and SLOW_WALK_ACCEL or WALK_ACCEL
   local bursts     = slower and 1 or 2   -- opening frames allowed RUN_ACCEL below 24
   local speed      = math.max(v, 0)      -- negative speed can be zeroed at once
   local distance, frames = 0, 0
-  while frames < frame_limit do
+  while true do
     local accel = (frames < bursts or speed >= WALK_MAX) and RUN_ACCEL or walk_accel
     speed = speed + accel
     if speed >= MAX_SPEED then break end -- this frame already moves at max speed
@@ -45,10 +46,10 @@ local function ramp_to_max_speed(v, slower, frame_limit)
   return distance, frames
 end
 
+-- Upper bound on x at PROJECT_TO_FRAME (exact bound when the target is at least a
+-- full ramp away); for any PROJECT_TO_FRAME, a score that ranks nodes consistently.
 local function bound_x_position(frame, use_0x703_rule)
-  local frames_left = PROJECT_TO_FRAME - frame
-  if frames_left <= 0 then return get_xpos() end
   local slower = use_0x703_rule and qualifies_for_slower_ramp()
-  local ramp_px, ramp_frames = ramp_to_max_speed(get_xvel(), slower, frames_left)
+  local ramp_px, ramp_frames = ramp_to_max_speed(get_xvel(), slower)
   return max_position_at_frame(frame + ramp_frames) + ramp_px + EDGE_PUSH_PX
 end
