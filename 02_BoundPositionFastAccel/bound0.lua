@@ -9,6 +9,12 @@ local ACCEL_SWITCH = 25       -- speed where the top rate opens up
 local FREE_FRAMES = 2         -- top-rate bursts a state can hold in reserve
 local EDGE_PX = 15 / 16       -- most the left screen edge can lift Mario
 
+-- Projected x-position at PROJECTION_FRAME, running at cap speed from `frame`.
+-- Exact for a sequence already at cap; the horizon shifts every score equally.
+local function score(x_pos, frame)
+    return x_pos + (PROJECTION_FRAME - frame) * PX_PER_FRAME_AT_CAP
+end
+
 -- Best-case ramp to cap from speed v: accelerate, then move, each frame.
 --   max(v, 0): the game can zero a negative speed at once (skid reset,
 --     screen edge), and no negative speed beats 0.
