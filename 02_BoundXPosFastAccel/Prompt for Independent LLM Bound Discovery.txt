@@ -22,8 +22,8 @@ me that rather than attempt with incomplete / unreliable information.
 
 Setting:
 World 1-1, from the first frame of control, small Mario, ~50 frames. 
-Each frame the input is any combination of Up, Down, Left, Right, 
-A, and B, including Left+Right and Up+Down. 
+Each frame the input is any combination of Up, Down, Left, Right, A, and B, 
+including Left+Right and Up+Down. 
 I believe speed is "$0057(signed) + $0705(unsigned) / 256"; and its cap is 40. 
 I need a function of current speed alone (which can be negative) giving
 the most speed and distance Mario can have k frames later from any state
