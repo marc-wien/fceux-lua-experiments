@@ -1,0 +1,47 @@
+I'm doing a "branch and bound" pruning of a per-frame input search for 
+Super Mario Bros. (NES, NTSC) using FCEUX Lua.  Please derive a *safe 
+and tight* x-position pruning bound function from the game's logic.
+
+(Example raw code references: [a] https://gist.github.com/1wErt3r/4048722 ,
+[b] https://6502disassembly.com/nes-smb/SuperMarioBros.html ;
+Example physics guides: [c] https://simplistic6502.github.io/smb1_tll/smbpedia_movement.html ,
+[d] https://web.archive.org/web/20130807122227im_/http://i276.photobucket.com/albums/kk21/jdaster64/smb_playerphysics.png ;
+Example decompilation: [e] https://github.com/nukep/SMB-Vanilla ;
+Example expert TAS-maker's utility: [g] https://github.com/MrWint/smb-opt ;
+Example RAM probe: [h] https://github.com/TheNoSwearGuy/smb.lua-and-smas-smb.lua/blob/main/Default/smb%20(FCEUX).lua ;
+Example "over-simplified" physics port: [i] https://mitxela.com/projects/console/mario ;
+Other references can, of course, be used; these happen to be familiar to me.)
+
+Any claims must be checked for correctness against raw code; not
+blindly trusting physics guides or ports. Please critically evaluate 
+the correctness of all source code consulted. Cross-checks across
+sources are encouraged.
+
+If you are unable to access the source code needed, I want you to tell
+me that rather than attempt with incomplete / unreliable information.
+
+Setting:
+World 1-1, from the first frame of control, small Mario, ~50 frames. 
+Each frame the input is any combination of Up, Down, Left, Right, 
+A, and B, including Left+Right and Up+Down. 
+I believe speed is "$0057(signed) + $0705(unsigned) / 256"; and its cap is 40. 
+I need a function of current speed alone (which can be negative) giving
+the most speed and distance Mario can have k frames later from any state
+with that speed. It must *never* understate what the game can do, and it
+should be as tight as you can make it; ideally while being simple and very
+readable as well. If reading extra RAM addresses and adding simple logic
+can tighten the bound without becoming highly complex, tell me which ones.
+
+Include in the response:
+the Lua function code of speed only;
+the mechanisms it accounts for;
+what you excluded;
+how confident you are on correctness and tightness, and why.
+
+I will likely ask these follow-up questions of an unsatisfactory answer:
+Can the function be significantly reduced to be simpler but equivalent?
+Does it simplify nicely if we process the velocity input with v=max(v,0) ?
+Can you concisely state the logic in simple words?
+Might any functions provided fail based on behaviors from moving left?
+Could we safely tighten it more if we read additional byte(s) of RAM, 
+while maintaining simplicity/interpretability?
