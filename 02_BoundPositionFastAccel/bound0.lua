@@ -61,3 +61,9 @@ end
 local function current_slow_rate()
     return USE_RAM_RULE and slow_rate() or ACCEL_SLOW
 end
+
+
+
+--
+-- Example usage: bound(x_pos, x_vel, frame, current_slow_rate())
+--
