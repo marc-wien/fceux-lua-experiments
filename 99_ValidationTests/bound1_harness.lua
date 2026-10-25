@@ -1,4 +1,4 @@
--- bound_harness.lua
+-- bound1_harness.lua
 -- Variant: loads the bound under test for the validation scripts
 --
 -- Loads 02_BoundAcceleration/bound1.lua exactly as committed, from its own
@@ -98,10 +98,9 @@ function H.envelope(B, v, slower, K, opts)
     d = d + move
     byte[k], dist[k] = math.floor(speed), d
   end
-  -- The projected-score offset: distance beyond full-speed cruising.
-  -- A line from this state can't score more than x + offset above
-  -- cruising at full speed from the start, and bound_x_position equals
-  -- max_position_at_frame(x, frame) + offset.
+  -- The projected-score offset: how far the bound lets a line from this
+  -- state get beyond cruising at full speed from the start. So
+  -- bound_x_position equals max_position_at_frame(x, frame) + offset.
   local offset = ramp_px - ramp_frames * cruise
   return { byte = byte, dist = dist, ramp_px = ramp_px,
            ramp_frames = ramp_frames, offset = offset, capped = capped }

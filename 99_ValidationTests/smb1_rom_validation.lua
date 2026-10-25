@@ -10,15 +10,16 @@
 -- How to run
 --   1. FCEUX 2.x with the NTSC Super Mario Bros. ROM. In Config > Input,
 --      tick "Allow Left+Right / Up+Down" (claim R4 checks it).
---   2. Keep this file next to smbmodel.lua and bound_harness.lua, with the
---      repo's 02_BoundAcceleration/bound1.lua where BOUND_FILE points.
+--   2. Keep this file next to smbmodel.lua and bound1_harness.lua, with the
+--      repo's 02_BoundAcceleration/bound1.lua where CFG.bound_file points.
 --   3. Power on (or reset) with no movie or savestate loaded, then run this
 --      script. It finds the first frame of control in 1-1 by itself.
 --   4. Minimize the window to speed it up. Output goes to the Lua console
---      and to LOG_FILE, next to this file.
--- Runtime: every section but the exhaustive one takes minutes. The
--- exhaustive one runs about 8.8 million single frames, which takes hours;
--- try EXHAUSTIVE_STRIDE = 50 first for a quick pass.
+--      and to CFG.log_file, next to this file.
+-- Runtime: every section but the exhaustive one should take minutes. The
+-- exhaustive one runs about 8.8 million single frames, so expect hours; it
+-- prints an estimate as it goes. Try CFG.exhaustive_stride = 50 first for a
+-- quick pass.
 --
 -- Reading the output: button letters are R Right, L Left, U Up, D Down, A,
 -- B, S Select; "-" means no buttons. Speeds print as speed byte:fraction
@@ -58,10 +59,27 @@ if debug and debug.getinfo then
   here = debug.getinfo(1, "S").source:match("^@(.*[/\\])") or ""
 end
 local SM = dofile(here .. "smbmodel.lua")
-local H = dofile(here .. "bound_harness.lua")
+local H = dofile(here .. "bound1_harness.lua")
 local B, bound_err = H.load(here .. CFG.bound_file)
 local floor, max = math.floor, math.max
 math.randomseed(CFG.seed)
+
+-- Adler-32 of a file's text with carriage returns removed, so a log names
+-- the exact files it tested whatever the line endings. To check one:
+-- python -c "import zlib;print('%08x' % zlib.adler32(open('F','rb').read()
+-- .replace(b'\r', b'')))"
+local function checksum(path)
+  local fh = io.open(path, "rb")
+  if not fh then return "missing" end
+  local text = (fh:read("*a"):gsub("\r", ""))
+  fh:close()
+  local a, b = 1, 0
+  for i = 1, #text do
+    a = (a + text:byte(i)) % 65521
+    b = (b + a) % 65521
+  end
+  return string.format("%08x", b * 65536 + a)
+end
 
 -- === Reporting ==============================================================
 
@@ -167,7 +185,7 @@ G.RAM = {
   y_force = 0x0433,     -- Player_Y_MoveForce
   x = 0x0086,           -- Player_X_Position
   page = 0x006D,        -- Player_PageLoc
-  sub = 0x0400,         -- Player_X_MoveForce for position (subpixel)
+  sub = 0x0400,         -- SprObject_X_MoveForce, slot 0: the subpixel
   screen_x = 0x071C,    -- ScreenLeft_X_Pos
   screen_page = 0x071A, -- ScreenLeft_PageLoc
   side_timer = 0x0785,  -- SideCollisionTimer
@@ -385,10 +403,10 @@ end
 
 local function section_setup()
   -- R1
-  local c = R.claim("R1", "The ROM is the standard NTSC release", {
+  local c = R.claim("R1", "The ROM is the known-good NTSC dump", {
     "Tests: the SHA-1 of the ROM's program and graphics data (no header)",
-    "starts ea343f4e, the known-good NTSC dump, which the disassembly",
-    "builds byte for byte.",
+    "starts ea343f4e: the known-good NTSC dump, which SMBDIS.ASM is",
+    "reported to build byte for byte.",
     "Supports: everything; the model was written from that disassembly.",
   })
   local have_rom = rom and rom.readbyte
@@ -455,7 +473,7 @@ local function section_setup()
 
   -- R3
   c = R.claim("R3", "The run starts at the first frame of control in 1-1", {
-    "Tests: after the start state, RAM reads: speed 00:00, facing right",
+    "Tests: at the start state, RAM reads: speed 00:00, facing right",
     "(1), moving direction 0, $0700 0, latch clear, RunningTimer 0, on",
     "the ground at y 176, x 40 on page 0, subpixel 0; small Mario, ground",
     "area, not swimming, scroll unlocked, screen at 0, no collision.",
@@ -593,7 +611,8 @@ local function section_witnesses()
   c = R.claim("R6", "A slow backwards speed resets to zero in one frame", {
     "Tests: the RTA opening's first two frames, Left+B then B alone: the",
     "speed goes to FE:D0 (-1.19), then to 00:00 in one frame (ProcSkid:",
-    "below $0700 = 11, a button held that isn't the moving direction).",
+    "$0700 below 11, a button other than A held, Left/Right not matching",
+    "the moving direction).",
     "Also Left+Right from rest: the reset runs every frame, so the speed",
     "stays at 01:30.",
     "Supports: the ramp starts from max(speed, 0); a slow negative speed",
@@ -625,8 +644,9 @@ local function section_witnesses()
 
   c = R.claim("R8", "With the latch set, Left+Right below 25 gains 416 a"
       .. " frame on the ground", {
-    "Tests: Right+B to 28 sets the latch; coasting below 25 keeps it;",
-    "Left+Right then adds 416 = 208 ($D0) doubled, frame after frame.",
+    "Tests: Right+B to 28 sets the latch; coasting below 25 keeps it.",
+    "Left+Right then adds 208 ($D0) on its first frame, which turns facing",
+    "to 3, and 416 (doubled) on every frame after, up to the cap of 24.",
     "Supports: WALK_ACCEL (416) is reached below 25, so the speed-only",
     "bound can't use 304 there.",
   })
@@ -649,8 +669,9 @@ local function section_witnesses()
       .. " per air frame below 25", {
     "Tests: run to 28 and one more ground frame (latch set), slow with",
     "Left to 10 or less, one Left+Right frame (speed 01:A0, facing 3,",
-    "moving 1), then A+Right: every air frame below 24 adds exactly 416",
-    "with FrictionAdder $01A0. JDaster64's chart has 152 here.",
+    "moving 1), then A+Right: every air frame that ends below the walking",
+    "cap (24) adds exactly 416, with FrictionAdder $01A0. JDaster64's",
+    "chart has 152 here.",
     "Supports: WALK_ACCEL (416) also applies in the air, holding forward.",
   })
   G.load()
@@ -694,8 +715,8 @@ local function section_witnesses()
 
   c = R.claim("R10", "From 25 up, in the air facing backwards, every frame"
       .. " gains 456", {
-    "Tests: fast accel's second jump. Right+B to 26, one frame of Left (a",
-    "skid: facing turns left), then A+Right: each air frame adds 456 =",
+    "Tests: fast accel's second jump. Right+B to 26, one frame of Left",
+    "(facing turns left), then A+Right: each air frame adds 456 =",
     "228 ($E4) doubled, to 40, because facing (left) differs from the",
     "moving direction (right), and the air uses $E4 from $0700 = 25.",
     "Supports: RUN_ACCEL (456) and RUN_ACCEL_MIN_SPEED (25).",
@@ -786,10 +807,10 @@ local function section_witnesses()
     "Tests: Left+B to 3 px from the edge, Left+Right into it: speed byte",
     "0, moving left, facing 3, $0700 25 or more. Then A+Right: the jump",
     "frame adds 456 (the air reads the stale $0700 as running speed, and",
-    "facing 3 differs from moving 2); each later air frame adds with",
-    "adder $01A0 (416) and facing 3; the first ground frame of Right+B",
-    "adds 456.",
-    "Supports: a free frame from the stale-$0700 state; part of why two.",
+    "facing 3 differs from moving 2); each later air frame uses adder",
+    "$01A0 (416) with facing 3; the first ground frame of Right+B adds 456.",
+    "Supports: a second way to get two 456 frames from speed 0 (FREE_FRAMES",
+    "= 2), through the stale-$0700 state.",
   })
   G.load()
   n = 0
@@ -1303,24 +1324,24 @@ end
 -- === R25-R28. Exhaustive one-frame comparison ===============================
 
 local function section_exhaustive(states)
-  local LRS = { { "", "none" }, { "R", "R" }, { "L", "L" }, { "LR", "LR" } }
+  -- Left/Right; then the other-button and RunningTimer cases: nothing
+  -- (timer 0 or 10), Select (a non-A button that isn't B), or B.
+  local LRS = { "", "R", "L", "LR" }
   local MIDS = {
-    { keys = "", timer = 0, what = "no other button, RunningTimer 0" },
-    { keys = "", timer = 10, what = "no other button, RunningTimer 10" },
-    { keys = "S", timer = 0, what = "Select (a non-A button, not B)" },
-    { keys = "B", timer = 0, what = "B" },
+    { keys = "", timer = 0 }, { keys = "", timer = 10 },
+    { keys = "S", timer = 0 }, { keys = "B", timer = 0 },
   }
   local ground_cases, air_cases = {}, {}
   for _, lr in ipairs(LRS) do
     for _, dn in ipairs({ "", "D" }) do
       for _, mid in ipairs(MIDS) do
         for _, a in ipairs({ "", "A" }) do
-          ground_cases[#ground_cases + 1] = { keys = lr[1] .. dn .. mid.keys
+          ground_cases[#ground_cases + 1] = { keys = lr .. dn .. mid.keys
               .. a, timer = mid.timer }
         end
       end
     end
-    air_cases[#air_cases + 1] = { keys = lr[1], timer = 0 }
+    air_cases[#air_cases + 1] = { keys = lr, timer = 0 }
   end
   local first = CFG.exhaustive_first
   local last = CFG.exhaustive_last or #states
@@ -1354,7 +1375,8 @@ local function section_exhaustive(states)
     "Tests: on every frame of R25 where the model adds or subtracts, the",
     "ROM's FrictionAdder equals the model's: 152, 208 or 228, doubled",
     "exactly when facing differs from the moving direction.",
-    "Supports: the bound's rates (304, 416, 456) are the only ones.",
+    "Supports: 456 is the largest acceleration, and 304 and 416 are the",
+    "doubled walking rates, as the bound assumes.",
   })
   local c_move = R.claim("R27", "... and Mario moves by the speed byte only", {
     "Tests: on every frame of R25, Mario's position changes by exactly 16",
@@ -1425,9 +1447,12 @@ end
 
 R.say("SMB1 ROM validation for the acceleration bound")
 R.say("Date: " .. os.date("%Y-%m-%d %H:%M"))
-R.say("Model: " .. here .. "smbmodel.lua")
-R.say("Bound: " .. here .. CFG.bound_file .. (B and "" or
-    ("  (NOT LOADED: " .. tostring(bound_err) .. ")")))
+R.say("Files tested (Adler-32 of each file's text, line endings ignored):")
+for _, f in ipairs({ "smb1_rom_validation.lua", "smbmodel.lua",
+                     "bound1_harness.lua", CFG.bound_file }) do
+  R.say(string.format("  %s  %s", checksum(here .. f), here .. f))
+end
+if not B then R.say("Bound NOT LOADED: " .. tostring(bound_err)) end
 local s = {}
 for _, name in ipairs({ "setup", "witnesses", "buttons", "edge", "jumps",
                         "play", "exhaustive" }) do

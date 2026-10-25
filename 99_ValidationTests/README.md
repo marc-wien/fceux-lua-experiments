@@ -19,24 +19,27 @@ it supports, then PASS or FAIL, with the first mismatches in full.
 | File | What it is |
 |---|---|
 | `smbmodel.lua` | The model: one frame of horizontal physics, from SMBDIS.ASM |
-| `bound_harness.lua` | Loads `bound1.lua`; gives the per-frame envelope of its ramp |
+| `bound1_harness.lua` | Loads `bound1.lua`; gives the per-frame envelope of its ramp |
 | `smb1_rom_validation.lua` | The FCEUX suite, claims R1-R28 |
 | `smb1_model_validation.lua` | The model check, claims M1-M11 |
 
 **Running.**
 - *ROM suite:* FCEUX 2.x with the NTSC ROM, and "Allow Left+Right / Up+Down"
   ticked. Power on, then run the script.
-  - Everything except R25-R28 takes minutes.
+  - Everything except R25-R28 should take minutes.
   - R25-R28 run about 8.8 million single frames. Expect hours; the suite
     prints an estimate. Set `exhaustive_stride = 50` for a quick pass first.
   - The suite writes `smb1_rom_validation_log.txt`. Commit it as the record.
-- *Model check:* about 40 s in Lua 5.1, about 7 s in LuaJIT. It also runs
-  from FCEUX's Lua console.
+- *Model check:* about 40 s in Lua 5.1, about 7 s in LuaJIT. It needs no ROM,
+  so it should also run from FCEUX's Lua window (not yet tried). It writes
+  `smb1_model_validation_log.txt`.
+- Each log starts with a checksum of every file it tested, so it records
+  exactly which versions passed.
 
-**The model.** `smbmodel.lua` has the same `step` as the version first
-checked against the ROM (commit 73261d4). Every output matches over all
-64,896 states, on the ground and in the air, and every input value. The
-revision made these changes:
+**The model.** `smbmodel.lua` has the same `step` as the version checked
+against the ROM on Oct 10 (committed as 73261d4). Every one of that version's
+outputs matches over all 64,896 states, on the ground and in the air, and
+every input value. The revision made these changes:
 - rewrote the comments;
 - dropped an alternative bound and proof potential that were stored there;
 - added two outputs: the adder chosen and whether it was applied;
@@ -45,7 +48,8 @@ revision made these changes:
 ## What the ROM suite confirms
 
 **Setup**
-- **R1** The ROM is the known-good NTSC dump (SHA-1 starts `ea343f4e`).
+- **R1** The ROM is the known-good NTSC dump: its SHA-1 starts
+  `ea343f4e`.
 - **R2** Its speed tables match the model's caps and adders:
   - MaxLeftXSpdData D8 E8 F0;
   - MaxRightXSpdData 28 18 10 0C;
@@ -63,7 +67,7 @@ Each shows a value the bound must allow, so that value can't be lowered.
 - **R7** Running caps the speed byte at 40 and keeps the fraction. The latch
   sets at 28.
 - **R8** With the latch set, Left+Right below 25 gains 416 a frame on the
-  ground.
+  ground, after a first frame at 208.
 - **R9** With the latch set, a jump holding Right gains 416 per air frame
   below 25.
 - **R10** From 25 up, in the air facing backwards, every frame gains 456 (fast
@@ -81,8 +85,9 @@ Each shows a value the bound must allow, so that value can't be lowered.
   Left+Right at 11+ walks at 304.
 
 **Inputs, the edge and jumps**
-- **R17** Across all 128 combinations of the seven buttons, at random
-  RunningTimer and previous-A values, only the inputs the model reads matter.
+- **R17** For 300 random states, across all 128 combinations of the seven
+  buttons, at random RunningTimer and previous-A values, only the inputs the
+  model reads matter.
 - **R18** The edge clamp, at every subpixel, speed byte -40..15, every
   facing, on the ground and in the air:
   - it puts Mario's pixel on the edge and keeps the subpixel;
@@ -99,16 +104,16 @@ Each shows a value the bound must allow, so that value can't be lowered.
 - **R22** The screen and the scope stay as assumed:
   - Mario is never left of the edge;
   - the edge never moves left, and moves right no more than Mario did;
-  - Mario is never near the right clamp;
+  - Mario never reaches the right-edge clamp;
   - no wall or floor pushes him;
   - play stays normal, with small Mario.
 - **R23** bound1 holds, frame by frame and by projected score, for the
   speed-only bound and the latch rule.
-- **R24** (information) The commented-out candidate also holds: one free
-  frame when $57 >= 1.
+- **R24** (information) The same check for the commented-out candidate:
+  one free frame when $57 >= 1.
 
-**Every model state and input case, one frame each** (64,896 states x 136
-cases)
+**Every model state and input case, one frame each** (64,896 states, 136
+frames each: 68 input cases, each at x 96 and on the edge)
 - **R25** The ROM's next speed, facing, moving direction, $0700 and latch
   equal the model's.
 - **R26** The adder applied equals the model's: 152, 208 or 228, doubled
@@ -133,20 +138,22 @@ cases)
   rule.
 - **M8** bound1 holds for projected scores, for both rates.
 - **M9** Each part is needed. Removing it lets some line beat the bound.
-- **M10** (information) Candidates.
+- **M10** (information) Candidates: the commented-out free-frame rule, and
+  score-only variants.
 - **M11** (information) The farthest the model allows from the 1-1 start.
 
 ## What this supports
 
-**Correctness.** The argument runs in four steps:
+**Correctness.** Once the ROM suite passes, the argument runs in four
+steps:
 1. **The model is the ROM.** In every state the game reaches here, one frame
    of the ROM equals one frame of the model:
    - single frames: R25-R28, R17 and R18;
    - along real lines: R20;
    - the game stays inside the model's state set (R21) and in scope (R19,
      R22).
-2. **The model can only overstate the game.** Any frame may be a takeoff or a
-   landing, and the edge clamp may come anywhere.
+2. **The model can only overstate the game.** In the model check, any frame
+   may be a takeoff or a landing, and the edge clamp may come anywhere.
 3. **No line in the model beats bound1.** This holds from any state, within
    60 frames, frame by frame and by score (M2-M8). Every ramp reaches full
    speed well within 60 frames.
@@ -154,9 +161,10 @@ cases)
    directly on the ROM, along sampled lines.
 
 **Tightness.**
-- In the model, bound1 is reached exactly: the closest margin is 0 for speed,
-  distance and score (M7, M8).
-- Every rate and allowance in it is reached in the ROM (R5-R14).
+- In the model, bound1 is reached exactly. The speed-only bound's closest
+  margin is 0 for speed, distance and score. The latch rule's is 0 frame by
+  frame and 1.1875 px by score (M7, M8).
+- Every rate and allowance in it is reached in the ROM, once R5-R14 pass.
 - Each part is needed (M9).
 
 **What it doesn't cover.**

@@ -6,10 +6,11 @@
 -- model against the ROM; this file checks the bound against the model.
 -- Together they carry the bound's claims to the game (see README.md).
 --
--- Runs in any Lua 5.1 (FCEUX's Lua console included, no ROM needed) or
--- LuaJIT: about 15 seconds in LuaJIT, a few minutes in plain Lua. Keep this
--- file next to smbmodel.lua and bound_harness.lua. Each claim prints what
--- it checks and how, then PASS or FAIL; a summary ends the run.
+-- Runs in Lua 5.1 or LuaJIT: under a minute in plain Lua 5.1, about 10
+-- seconds in LuaJIT. It needs no ROM, so it should also run from FCEUX's Lua
+-- window (not yet tried there). Keep this file next to smbmodel.lua and
+-- bound1_harness.lua. Each claim prints what it checks and how, then PASS or
+-- FAIL; a summary ends the run, and LOG_FILE gets a copy.
 --
 -- What "every state and input" means here: every state in the model's set
 -- (SM.in_set), each starting on the ground or in the air, and on every
@@ -50,11 +51,28 @@ memory = {
 }
 
 local SM = dofile(here .. "smbmodel.lua")
-local H = dofile(here .. "bound_harness.lua")
+local H = dofile(here .. "bound1_harness.lua")
 local B, load_err = H.load(here .. BOUND_FILE)
 memory = real_memory
 
 local floor, max, min = math.floor, math.max, math.min
+
+-- Adler-32 of a file's text with carriage returns removed, so a log names
+-- the exact files it tested whatever the line endings. To check one:
+-- python -c "import zlib;print('%08x' % zlib.adler32(open('F','rb').read()
+-- .replace(b'\r', b'')))"
+local function checksum(path)
+  local fh = io.open(path, "rb")
+  if not fh then return "missing" end
+  local text = (fh:read("*a"):gsub("\r", ""))
+  fh:close()
+  local a, b = 1, 0
+  for i = 1, #text do
+    a = (a + text:byte(i)) % 65521
+    b = (b + a) % 65521
+  end
+  return string.format("%08x", b * 65536 + a)
+end
 
 -- === Reporting ==============================================================
 
@@ -104,8 +122,11 @@ local function state_text(st, ground)
 end
 
 R.say("SMB1 acceleration bound: exhaustive check against the model")
-R.say(string.format("Model: %ssmbmodel.lua   Bound: %s%s", here, here,
-    BOUND_FILE))
+R.say("Files tested (Adler-32 of each file's text, line endings ignored):")
+for _, f in ipairs({ "smb1_model_validation.lua", "smbmodel.lua",
+                     "bound1_harness.lua", BOUND_FILE }) do
+  R.say(string.format("  %s  %s", checksum(here .. f), here .. f))
+end
 R.say(string.format("Horizon: every k = 1..%d frames from every state", K))
 
 -- === M1. The bound file =====================================================
@@ -159,8 +180,9 @@ local c_set = R.claim("M2", "The model's state set is closed", {
 })
 local c_add = R.claim("M3", "No frame adds more than 456 to max(speed, 0)", {
   "For every transition: the speed at the end of the frame, and the speed",
-  "that moved Mario, are at most max(start speed, 0) + 456/256 subpixels.",
-  "456 is $E4 doubled, the largest adder.",
+  "that moved Mario, are at most 456 above max(start speed, 0), in the",
+  "model's units (1/256 subpixel per frame). 456 is $E4 doubled, the",
+  "largest adder.",
 })
 local c_cap = R.claim("M4", "The speed byte never leaves -40..+40", {
   "For every transition, the speed byte at the end of the frame and the",
@@ -169,12 +191,12 @@ local c_cap = R.claim("M4", "The speed byte never leaves -40..+40", {
 local c_cross = R.claim("M5", "Speed 25 is reached from below only on the"
     .. " ground, running", {
   "For every transition from a speed byte of 24 or less to 25 or more:",
-  "it is a ground frame using the running rules. So in the air below 25",
-  "the walking rates apply, which is why the bound's top rate only starts",
-  "at RUN_ACCEL_MIN_SPEED once Mario is in the air.",
+  "it is a ground frame using the running rules. In the air below 25,",
+  "Mario is held to the walking cap of 24.",
 })
 
--- Transitions, deduplicated by (next state, move speed), for the search.
+-- Transitions, deduplicated by (next state, move speed), for the k-frame
+-- search below.
 local succ, wmts, t_first, t_last, nt = {}, {}, {}, {}, 0
 for b = 1, nb do
   local st = states[b]
