@@ -18,7 +18,7 @@
 -- Branch and bound: prune using the *min* of a node's bound and its parent's.
 -- Each call grants the free frames (below) afresh, even if the path already
 -- spent them, so a child's bound can exceed its parent's. Both bound the same
--- continuations, so the smaller one is the truer bound.
+-- continuations, so the smaller one is the tighter bound.
 
 local PROJECT_TO_FRAME = 45         -- frame scores are projected to (see Scope)
 local MAX_SPEED = 40                -- the speed byte $57 caps at $28
@@ -33,7 +33,7 @@ local EDGE_PUSH_PX = 15 / 16        -- most the left screen edge can lift Mario
 -- turnaround (facing away from the motion, then pressing toward it with B on
 -- the ground) leaves one free frame. A Left+Right double charge (a low-speed
 -- skid sets the moving direction to 3, then facing turns away) leaves two. No
--- state holds more than two, and crediting them immediately bounds safely.
+-- state holds more than two, and they are applied immediately.
 local FREE_FRAMES = 2
 
 local rb, rbs = memory.readbyte, memory.readbytesigned
