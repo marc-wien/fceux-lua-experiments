@@ -1,6 +1,8 @@
 local MAX_SPEED = 40          -- x speed cap, in 1/16 px/frame; needs B held
 local PX_PER_FRAME_AT_CAP = MAX_SPEED / 16
 
+local PROJECTION_FRAME = 45   -- score = projected x-position at this frame
+
 -- Fastest acceleration the game allows, in speed units per frame. Each is
 -- a FrictionData entry, doubled when facing ~= moving direction.
 local ACCEL_RUN  = 456 / 256  -- $E4 x2: running, or airborne at 25+

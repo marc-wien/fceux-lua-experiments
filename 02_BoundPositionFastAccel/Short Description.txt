@@ -1,0 +1,20 @@
+Context: Code for a *safe* pruning bound to use in per-frame input search in
+Super Mario Bros. (NES, NTSC), run in FCEUX Lua. The search starts at World
+1-1 on the first frame of control (small Mario, x = 40 px, speed 0) and
+covers about the first 50 frames. Each frame's input can be any combination
+of Up, Down, Left, Right, A, and B, with Left+Right and Up+Down included.
+
+The key game state is its x position ($006D*256 + $0086 + $0400/256 px) and
+its speed (signed $0057 + $0705/256, in 1/16 px per frame), at frame number
+`frame`. Mario moves by the $0057 byte, and full speed is 40 (2.5 px/frame).
+A normalized scoring is done when full speed is reached, to project that x
+position to an arbitrary future "projection frame number" at full speed.
+
+The constants come from the game's acceleration rules. FrictionData ($E4,
+$98, $D0) is doubled when facing differs from the moving direction, which is
+the basis of "fast accel" tech. In the air, $E4 applies only at speed 25+;
+below that it's $98, or $D0 while the RunningSpeed latch is set (the latch
+sets at speed 28). A turnaround can leave one doubled running frame in
+reserve, and a Left+Right "double charge" can leave two. A low-speed skid or
+the left screen edge can zero a negative speed at once, and the edge keeps
+the subpixel, which can lift Mario up to 15/16 px.
