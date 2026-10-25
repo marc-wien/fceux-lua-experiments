@@ -78,6 +78,15 @@ local function ramp_to_max_speed(v, slower)
   -- screen edge can zero it in one frame.
   local speed = math.max(v, 0)
   local distance, frames = 0, 0
+  
+  --local FREE_FRAMES = (rbs(0x0057) >= 1) and 1 or 2
+  
+    --The key point is that this setup always ends with $57 = 0. Moving 
+    --direction 3 only comes from a skid, which zeroes $57, and only an 
+    --un-doubled friction add of 152 or 208 (under 256) can follow without 
+    --changing it. The stale-$0700 free frame also needs $57 = 0, because 
+    --only the edge clamp leaves $0700 stale in this scope.
+  
   while true do
     local accel = walk_accel
     if frames < FREE_FRAMES or speed >= RUN_ACCEL_MIN_SPEED then
