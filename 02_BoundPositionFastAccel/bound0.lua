@@ -1,6 +1,5 @@
-local MAX_SPEED = 40          -- x speed cap, in 1/16 px/frame; needs B held
+local MAX_SPEED = 40          -- x speed cap while running, in 1/16 px/frame
 local PX_PER_FRAME_AT_CAP = MAX_SPEED / 16
-
 local PROJECTION_FRAME = 45   -- score = projected x-position at this frame
 
 -- Fastest acceleration the game allows, in speed units per frame. Each is
@@ -44,18 +43,21 @@ local function bound(x_pos, x_vel_ub, frame, accel_slow)
     return score(x_pos + dist, frame + frames)
 end
 
---
---
---
-
--- Optional: read RAM to use 304 below 25. 416 needs the RunningSpeed
--- latch, which only sets at |speed| >= 28. Moving right, the ramp is at
--- the top rate by then; moving left, a run into the screen edge can latch
--- it at speed 0 -- hence the speed >= 0 test.
+-- Optional (USE_RAM_RULE): read RAM to use 304 below 25. 416 needs the
+-- RunningSpeed latch, which only sets at |speed| >= 28. Moving right, the
+-- ramp is at the top rate by then; moving left, a run into the screen edge
+-- can latch it at speed 0 -- hence the speed >= 0 test. Checked in two
+-- models and against the ROM in random play.
 local ACCEL_WALK = 304 / 256  -- $98 x2: below 25, latch clear
 local function slow_rate()
     local latch_clear = memory.readbyte(0x0703) == 0     -- RunningSpeed
     local abs_low = memory.readbyte(0x0700) < 25         -- can be stale
     local not_left = memory.readbytesigned(0x0057) >= 0
     return (latch_clear and abs_low and not_left) and ACCEL_WALK or ACCEL_SLOW
+end
+
+-- The slow rate for the state the emulator holds right now: slow_rate()
+-- with USE_RAM_RULE, otherwise always ACCEL_SLOW (speed alone).
+local function current_slow_rate()
+    return USE_RAM_RULE and slow_rate() or ACCEL_SLOW
 end
