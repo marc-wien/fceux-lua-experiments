@@ -1,7 +1,7 @@
 -- Upper bound for branch-and-bound pruning of a per-frame input search in SMB1
--- (NES, NTSC), for rightward acceleration *to max speed*.
+-- (NES, NTSC), specifically for rightward acceleration *up to max speed*.
 --
--- A sequence is scored on the frame it first reaches max speed, as its x
+-- A sequence is scored based on the frame it first reaches max speed, as its x
 -- projected to PROJECT_TO_FRAME at max speed (2.5 px/frame). bound_x_position()
 -- is the highest score any continuation of the current state can reach: the
 -- fastest possible ramp to max speed, then max speed from there on.
@@ -15,25 +15,25 @@
 --     object is the ? block at x = 256; Mario can't pass about x = 165 in ~50
 --     frames.
 --
--- Branch and bound: prune on the minimum of a node's bound and its parent's.
+-- Branch and bound: prune using the *min* of a node's bound and its parent's.
 -- Each call grants the free frames (below) afresh, even if the path already
 -- spent them, so a child's bound can exceed its parent's. Both bound the same
--- continuations, so the smaller one is the true bound.
+-- continuations, so the smaller one is the truer bound.
 
-local PROJECT_TO_FRAME = 45 -- frame scores are projected to (see Scope)
-local MAX_SPEED = 40 -- the speed byte $57 caps at $28
-local PX_PER_FRAME_AT_MAX_SPEED = MAX_SPEED / 16 -- 2.5
-local RUN_ACCEL = 0x1C8 / 256 -- $E4 doubled: the largest per-frame acceleration
-local RUN_ACCEL_MIN_SPEED = 25 -- from here up, RUN_ACCEL every frame (airborne)
-local WALK_ACCEL = 0x1A0 / 256 -- $D0 doubled: best below 25 (latch set)
+local PROJECT_TO_FRAME = 45         -- frame scores are projected to (see Scope)
+local MAX_SPEED = 40                -- the speed byte $57 caps at $28
+local PX_PER_FRAME_AT_MAX_SPEED = MAX_SPEED / 16    -- 2.5
+local RUN_ACCEL = 0x1C8 / 256       -- $E4 doubled: the largest per-frame accel
+local RUN_ACCEL_MIN_SPEED = 25      -- from here up, RUN_ACCEL every frame (air)
+local WALK_ACCEL = 0x1A0 / 256      -- $D0 doubled: best below 25 (latch set)
 local SLOW_WALK_ACCEL = 0x130 / 256 -- $98 doubled: best below 25 (latch clear)
-local EDGE_PUSH_PX = 15 / 16 -- most the left screen edge can lift Mario
+local EDGE_PUSH_PX = 15 / 16        -- most the left screen edge can lift Mario
 
 -- Free frames: the ramp's first two frames get RUN_ACCEL at any speed. A
 -- turnaround (facing away from the motion, then pressing toward it with B on
 -- the ground) leaves one free frame. A Left+Right double charge (a low-speed
 -- skid sets the moving direction to 3, then facing turns away) leaves two. No
--- state holds more than two, and taking them first is the most generous order.
+-- state holds more than two, and crediting them immediately bounds safely.
 local FREE_FRAMES = 2
 
 local rb, rbs = memory.readbyte, memory.readbytesigned
@@ -60,9 +60,9 @@ end
 -- at the screen edge, so nodes moving left don't qualify. Turning around to do
 -- that from a rightward node costs far more than the latch gains back.
 local function qualifies_for_slower_ramp()
-  return rb(0x0703) == 0 -- latch clear
-     and rb(0x0700) < 25 -- |speed| below 25, even if $0700 is stale
-     and rbs(0x0057) >= 0 -- not moving left
+  return rb(0x0703) == 0    -- latch clear
+     and rb(0x0700) < 25    -- |speed| below 25, even if $0700 is stale
+     and rbs(0x0057) >= 0   -- not moving left
 end
 
 -- Fastest possible ramp from speed v to max speed. Returns the distance (px)
@@ -84,7 +84,7 @@ local function ramp_to_max_speed(v, slower)
       accel = RUN_ACCEL
     end
     speed = speed + accel
-    if speed >= MAX_SPEED then break end -- counted at max speed instead
+    if speed >= MAX_SPEED then break end    -- counted at max speed instead
     frames = frames + 1
     local move = math.floor(speed) / 16
     -- The left edge snaps Mario's pixel but keeps his subpixel, which can leave
@@ -100,8 +100,8 @@ end
 -- of the file). Exact for a node already at max speed. Reads RAM, so call it
 -- while the emulator holds the node's state. When pruning, take the minimum of
 -- this and the parent node's bound (see Branch and bound, at the top).
-local function bound_x_position(frame, use_0x703_rule)
-  local slower = use_0x703_rule and qualifies_for_slower_ramp()
+local function bound_x_position(frame, use_latch_rule)
+  local slower = use_latch_rule and qualifies_for_slower_ramp()
   local ramp_px, ramp_frames = ramp_to_max_speed(get_xvel(), slower)
   return max_position_at_frame(get_xpos() + ramp_px, frame + ramp_frames)
 end
