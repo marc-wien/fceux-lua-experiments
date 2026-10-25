@@ -43,11 +43,16 @@ local function bound(x_pos, x_vel_ub, frame, accel_slow)
     return score(x_pos + dist, frame + frames)
 end
 
--- Optional (USE_RAM_RULE): read RAM to use 304 below 25. 416 needs the
--- RunningSpeed latch, which only sets at |speed| >= 28. Moving right, the
--- ramp is at the top rate by then; moving left, a run into the screen edge
--- can latch it at speed 0 -- hence the speed >= 0 test. Checked in two
--- models and against the ROM in random play.
+-- Optional: read RAM to use 304 below 25. 416 needs the RunningSpeed
+-- latch, which sets only when $0700 >= 28 (it can be stale, hence the
+-- < 25 test). Moving right, the bound passes 28 before the real speed
+-- can, and is at the top rate from 25 on, so a latch set that way never
+-- helps. The risk is moving left: speed -28 then a Right press at the
+-- screen edge gives the latch at speed ~0. A node already moving left
+-- can be one frame from that, hence the speed >= 0 test. A node moving
+-- right can still turn around, but reaching -28 takes 16+ frames (40 px
+-- at cap), and the latched ramp gains back only ~8 px, so the walk-rate
+-- bound still covers it.
 local ACCEL_WALK = 304 / 256  -- $98 x2: below 25, latch clear
 local function slow_rate()
     local latch_clear = memory.readbyte(0x0703) == 0     -- RunningSpeed
@@ -61,7 +66,6 @@ end
 local function current_slow_rate()
     return USE_RAM_RULE and slow_rate() or ACCEL_SLOW
 end
-
 
 
 --
