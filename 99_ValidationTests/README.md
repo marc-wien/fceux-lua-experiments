@@ -22,6 +22,7 @@ it supports, then PASS or FAIL, with the first mismatches in full.
 | `bound1_harness.lua` | Loads `bound1.lua`; gives the per-frame envelope of its ramp |
 | `smb1_rom_validation.lua` | The FCEUX suite, claims R1-R28 |
 | `smb1_model_validation.lua` | The model check, claims M1-M11 |
+| `OPEN_CLAIMS.md` | Claims not yet confirmed in the ROM, and ideas for tightening |
 
 **Running.**
 - *ROM suite:* FCEUX 2.x with the NTSC ROM, and "Allow Left+Right / Up+Down"
@@ -200,9 +201,9 @@ steps:
 - **Reference (M11):** the farthest the model allows from the start is
   71.8125 px in 45 frames, so x 111.8125.
 
-**ROM suite:** not yet run on the ROM. The scripts were tested against a
-stand-in emulator (the model plus simple vertical motion), with faults
-injected:
+**ROM suite:** not yet run on the ROM. Before committing, the scripts were
+tested offline against a stand-in emulator (not in the repo: the model plus
+simple vertical motion), with faults injected:
 - a latch threshold of 29;
 - a 1/16 px extra edge lift;
 - movement by the fraction;
@@ -211,3 +212,5 @@ injected:
 Each fault failed the claims that test the behavior it changed. R1 fails in
 every stand-in run, because the stand-in has no real ROM; the clean run
 passed every other claim.
+
+Open and untested claims are listed in `OPEN_CLAIMS.md`.
