@@ -2,7 +2,8 @@
 -- Variant: ROM validation suite (FCEUX)
 --
 -- Checks, on the real ROM, the game behavior that the acceleration bound
--- (02_BoundAcceleration/bound1.lua) and its model (smbmodel.lua) rely on.
+-- (02_BoundAcceleration/bound2.lua, or bound1.lua) and its model
+-- (smbmodel.lua) rely on.
 -- Each claim prints what it tests, how, and what it supports, then PASS or
 -- FAIL, with the first mismatches in full. README.md lists the claims and
 -- what they add up to.
@@ -10,8 +11,8 @@
 -- How to run
 --   1. FCEUX 2.x with the NTSC Super Mario Bros. ROM. In Config > Input,
 --      tick "Allow Left+Right / Up+Down" (claim R4 checks it).
---   2. Keep this file next to smbmodel.lua and bound1_harness.lua, with the
---      repo's 02_BoundAcceleration/bound1.lua where CFG.bound_file points.
+--   2. Keep this file next to smbmodel.lua and bound_harness.lua, with the
+--      bound file where CFG.bound_file points (bound2.lua in the repo).
 --   3. Power on (or reset) with no movie or savestate loaded, then run this
 --      script. It finds the first frame of control in 1-1 by itself.
 --   4. Minimize the window to speed it up. Output goes to the Lua console
@@ -48,7 +49,7 @@ local CFG = {
   seed = 20261025,
   show = 5,               -- mismatches printed in full per claim
   progress_seconds = 60,
-  bound_file = "../02_BoundAcceleration/bound1.lua",
+  bound_file = "../02_BoundAcceleration/bound2.lua",
   log_file = "smb1_rom_validation_log.txt",
 }
 
@@ -59,9 +60,10 @@ if debug and debug.getinfo then
   here = debug.getinfo(1, "S").source:match("^@(.*[/\\])") or ""
 end
 local SM = dofile(here .. "smbmodel.lua")
-local H = dofile(here .. "bound1_harness.lua")
+local H = dofile(here .. "bound_harness.lua")
 local B, bound_err = H.load(here .. CFG.bound_file)
-local floor, max = math.floor, math.max
+local BOUND_NAME = CFG.bound_file:match("([^/\\]+)%.lua$") or CFG.bound_file
+local floor, max, min = math.floor, math.max, math.min
 math.randomseed(CFG.seed)
 
 -- Adler-32 of a file's text with carriage returns removed, so a log names
@@ -871,7 +873,7 @@ local function section_witnesses()
       "28 or more), Left+Right (latch sets at speed 0), and jump holding",
       "Right. Searches nearby frame counts. Shows the speed then exceeds",
       "the 304 ramp from that state, so a rule without the speed test",
-      "would break; bound1 gives that state 416 and must hold.",
+      "would break; " .. BOUND_NAME .. " gives that state 416 and must hold.",
       "Supports: qualifies_for_slower_ramp()'s speed >= 0 test.",
     })
     local found = false
@@ -911,7 +913,8 @@ local function section_witnesses()
                 beat.lim))
             R.say("    inputs: " .. T.line(line, beat.t))
             R.check(c, held, function()
-              return "bound1 (416 from that state) was beaten on this line"
+              return BOUND_NAME .. " (416 from that state) was beaten on this"
+                  .. " line"
             end)
           end
         end
@@ -1124,7 +1127,9 @@ local SETUPS = {
     end },
 }
 
-local function cand_free(v) if floor(v) >= 1 then return 1 end return 2 end
+-- The burst check (bound2.lua's do_burst_check): one free frame when the
+-- speed byte is nonzero.
+local BURST = { burst_check = true }
 
 -- Is a speed byte s, after moving `moved` px, within the envelope at k?
 local function within(env, s, moved, k)
@@ -1162,26 +1167,37 @@ local function section_play()
     "Supports: the bound's distance rule (the edge never carries Mario",
     "past where his own moves and one 15/16 px clamp could); the scope.",
   })
-  local c_bound, c_cand
+  local c_bound, c_burst
   if B then
-    c_bound = R.claim("R23", "bound1 holds in real play", {
-      "Tests: at every frame j of R20, bound1's own functions read the",
+    c_bound = R.claim("R23", BOUND_NAME .. " holds in real play", {
+      "Tests: at every frame j of R20, the bound's own functions read the",
       "game's RAM. For every later frame t within " .. CFG.K .. " frames:",
       "the speed byte at t is within the ramp's after t - j frames, and so",
       "is the distance moved; whenever Mario is at full speed at t, his",
       "projected score is within bound_x_position(j). Speed only (416) at",
       "every j; the latch rule (304) where qualifies_for_slower_ramp() is",
-      "true. Also checks the envelope matches bound1's ramp at every j.",
+      "true. Also checks the envelope matches the bound's ramp at every j.",
       "Supports: the bound itself, on the ROM, along real lines.",
     })
-    c_cand = R.claim("R24", "Candidate: one free frame when the speed byte"
-        .. " is 1 or more", {
-      "Tests: as R23, with the rule commented out in bound1.lua's ramp.",
-      "Information only; not part of bound1.",
-    })
+    if B.has_burst_check then
+      c_burst = R.claim("R24", BOUND_NAME .. " holds with its burst check", {
+        "Tests: as R23, with do_burst_check: one free frame where the speed",
+        "byte is nonzero, and the scores from bound_x_position(j, rule,",
+        "true).",
+        "Supports: the burst check (FREE_FRAMES_IF_MOVING), on the ROM.",
+      })
+    else
+      c_burst = R.claim("R24", "Candidate: the burst check", {
+        "Tests: as R23, with one free frame where the speed byte is nonzero",
+        "(bound2.lua's do_burst_check).",
+        "Information only; not part of " .. BOUND_NAME .. ".",
+      })
+      c_burst.info = true
+    end
   else
-    R.skip("R23", "bound1 holds in real play", "bound file not loaded: "
+    R.skip("R23", BOUND_NAME .. " holds in real play", "bound file not loaded: "
         .. tostring(bound_err))
+    R.skip("R24", "The burst check", "bound file not loaded")
   end
 
   local K, P = CFG.K, (B and B.PROJECT_TO_FRAME or 45)
@@ -1191,23 +1207,41 @@ local function section_play()
     local ctx, line, hist = {}, {}, {}
     setup.init(ctx)
     G.load()
+    -- At frame j: the envelopes and scores the bound allows from here.
+    -- e: speed only (416) and, where it qualifies, the latch rule (304);
+    -- b: the same with the burst check.
     local function record(j)
       if not B then return end
       local v, slower = B.get_xvel(), B.qualifies_for_slower_ramp()
       local h = { pos = G.pos(), e416 = H.envelope(B, v, false, K),
-                  c416 = H.envelope(B, v, false, K,
-                      { free_frames_fn = cand_free }),
+                  b416 = H.envelope(B, v, false, K, BURST),
                   score416 = B.bound_x_position(j, false),
                   score304 = B.bound_x_position(j, true) }
-      local ok, why = H.matches(B, v, false, h.e416)
       if slower then
         h.e304 = H.envelope(B, v, true, K)
-        h.c304 = H.envelope(B, v, true, K, { free_frames_fn = cand_free })
-        local ok2, why2 = H.matches(B, v, true, h.e304)
-        if not ok2 then ok, why = ok2, why2 end
+        h.b304 = H.envelope(B, v, true, K, BURST)
       end
-      if not ok then
-        R.fail(c_bound, "envelope differs from bound1: " .. why)
+      local function check(c, burst, which)
+        for _, rule in ipairs({ false, true }) do
+          local env = h[which .. (rule and "304" or "416")]
+          if env then
+            local ok, why = H.matches(B, v, rule, env, burst)
+            if not ok then
+              R.fail(c, "envelope differs from the bound: " .. why)
+            end
+          end
+        end
+      end
+      check(c_bound, false, "e")
+      if B.has_burst_check then
+        check(c_burst, true, "b")
+        h.bscore416 = B.bound_x_position(j, false, true)
+        h.bscore304 = B.bound_x_position(j, true, true)
+      else
+        -- A candidate: the score its envelope allows, as M6 relates them.
+        local base = h.pos / 256 + (P - j) * B.PX_PER_FRAME_AT_MAX_SPEED
+        h.bscore416 = base + h.b416.offset
+        h.bscore304 = h.b304 and base + h.b304.offset or h.bscore416
       end
       hist[j] = h
     end
@@ -1296,10 +1330,19 @@ local function section_play()
             R.fail(c_bound, string.format("%s: from frame %d: %s", where, j,
                 table.concat(why, "; ")))
           end
-          local cok = within(h.c416, s, moved, k)
-              and (not h.c304 or within(h.c304, s, moved, k))
-          if cok then R.pass(c_cand) else
-            R.fail(c_cand, string.format("%s: from frame %d", where, j))
+          local bwhy = {}
+          if not within(h.b416, s, moved, k)
+              or (h.b304 and not within(h.b304, s, moved, k)) then
+            bwhy[#bwhy + 1] = string.format("speed byte %d, moved %.4f px",
+                s, moved)
+          end
+          if capped and score > min(h.bscore416, h.bscore304) + 1e-9 then
+            bwhy[#bwhy + 1] = string.format("score %.4f above %.4f", score,
+                min(h.bscore416, h.bscore304))
+          end
+          if #bwhy == 0 then R.pass(c_burst) else
+            R.fail(c_burst, string.format("%s: from frame %d: %s", where, j,
+                table.concat(bwhy, "; ")))
           end
         end
         record(t)
@@ -1317,8 +1360,10 @@ local function section_play()
   R.done(c_set)
   R.done(c_scope, nil, string.format("farthest right of the edge: %d px",
       most_right))
-  if c_bound then R.done(c_bound); R.done(c_cand, c_cand.bad == 0 and "PASS"
-      or "FAIL", "(information only)") end
+  if c_bound then
+    R.done(c_bound)
+    R.done(c_burst, nil, c_burst.info and "(information only)" or nil)
+  end
 end
 
 -- === R25-R28. Exhaustive one-frame comparison ===============================
@@ -1383,7 +1428,7 @@ local function section_exhaustive(states)
     "x the speed byte after acceleration (1/256 px units), whatever the",
     "fraction; on the edge, the clamp sets his pixel to the edge and keeps",
     "the subpixel, exactly when his move ends there or past it.",
-    "Supports: bound1 counts each frame's move as floor(speed) / 16.",
+    "Supports: the bound counts each frame's move as floor(speed) / 16.",
   })
   local c_jump = R.claim("R28", "... and jumps start on the frame A is"
       .. " pressed", {
@@ -1449,7 +1494,7 @@ R.say("SMB1 ROM validation for the acceleration bound")
 R.say("Date: " .. os.date("%Y-%m-%d %H:%M"))
 R.say("Files tested (Adler-32 of each file's text, line endings ignored):")
 for _, f in ipairs({ "smb1_rom_validation.lua", "smbmodel.lua",
-                     "bound1_harness.lua", CFG.bound_file }) do
+                     "bound_harness.lua", CFG.bound_file }) do
   R.say(string.format("  %s  %s", checksum(here .. f), here .. f))
 end
 if not B then R.say("Bound NOT LOADED: " .. tostring(bound_err)) end
@@ -1480,8 +1525,8 @@ R.say("Summary")
 local all = true
 for _, c in ipairs(R.list) do
   R.say(string.format("  %-4s %-10s %s", c.id, c.status or "?", c.title))
-  if c.status == "FAIL" and c.id ~= "R24" then all = false end
+  if c.status == "FAIL" and not c.info then all = false end
 end
-R.say(all and "NO CLAIM FAILED (R24 is information only; NOT RUN and NOT"
-    .. " SHOWN are not failures)" or "SOME CLAIMS FAILED")
+R.say(all and "NO CLAIM FAILED (NOT RUN and NOT SHOWN are not failures;"
+    .. " information-only claims say so)" or "SOME CLAIMS FAILED")
 if R.out then R.out:close() end

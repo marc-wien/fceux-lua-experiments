@@ -1,25 +1,31 @@
-# 99_ValidationTests
+# 10_ValidationTests
 
 These scripts check that the acceleration bound
-(`02_BoundAcceleration/bound1.lua`) holds for the real game, and that each
-part of it is needed. The argument has two links, and each has a script:
+(`02_BoundAcceleration/bound2.lua`) holds for the real game, and that each
+part of it is needed. `bound2.lua` is `bound1.lua` with one option added,
+the burst check (`do_burst_check`: one free frame when $57 is nonzero);
+with it off, the two give the same bound. The argument has two links, and
+each has a script:
 
 1. **ROM to model.** `smb1_rom_validation.lua` (FCEUX) checks that
    `smbmodel.lua` computes Mario's horizontal movement exactly as the ROM
    does, for every state and input case the model covers.
 2. **Model to bound.** `smb1_model_validation.lua` (any Lua 5.1) checks
-   `bound1.lua` against every state and input of the model, up to 60 frames
-   ahead.
+   the bound against every state and input of the model, up to 60 frames
+   ahead, with and without the burst check.
 
-The ROM suite also checks `bound1.lua` directly on the ROM, during random
-play. Both scripts load `bound1.lua` from its own file, so they test the
-committed text, not a copy. Each claim prints what it tests, how, and what
-it supports, then PASS or FAIL, with the first mismatches in full.
+The ROM suite also checks the bound directly on the ROM, during random
+play. Both scripts load the bound from its own file, so they test the
+committed text, not a copy. They test `bound2.lua` by default; set
+`BOUND_FILE` (model check) or `CFG.bound_file` (ROM suite) to
+`../02_BoundAcceleration/bound1.lua` to test that file instead. Each claim
+prints what it tests, how, and what it supports, then PASS or FAIL, with the
+first mismatches in full.
 
 | File | What it is |
 |---|---|
 | `smbmodel.lua` | The model: one frame of horizontal physics, from SMBDIS.ASM |
-| `bound1_harness.lua` | Loads `bound1.lua`; gives the per-frame envelope of its ramp |
+| `bound_harness.lua` | Loads `bound1.lua` or `bound2.lua`; gives the per-frame envelope of its ramp |
 | `smb1_rom_validation.lua` | The FCEUX suite, claims R1-R28 |
 | `smb1_model_validation.lua` | The model check, claims M1-M11 |
 | `OPEN_CLAIMS.md` | Claims not yet confirmed in the ROM, and ideas for tightening |
@@ -31,7 +37,7 @@ it supports, then PASS or FAIL, with the first mismatches in full.
   - R25-R28 run about 8.8 million single frames. Expect hours; the suite
     prints an estimate. Set `exhaustive_stride = 50` for a quick pass first.
   - The suite writes `smb1_rom_validation_log.txt`. Commit it as the record.
-- *Model check:* about 40 s in Lua 5.1, about 7 s in LuaJIT. It needs no ROM,
+- *Model check:* about 50 s in Lua 5.1, about 10 s in LuaJIT. It needs no ROM,
   so it should also run from FCEUX's Lua window (not yet tried). It writes
   `smb1_model_validation_log.txt`.
 - Each log starts with a checksum of every file it tested, so it records
@@ -108,10 +114,10 @@ Each shows a value the bound must allow, so that value can't be lowered.
   - Mario never reaches the right-edge clamp;
   - no wall or floor pushes him;
   - play stays normal, with small Mario.
-- **R23** bound1 holds, frame by frame and by projected score, for the
+- **R23** The bound holds, frame by frame and by projected score, for the
   speed-only bound and the latch rule.
-- **R24** (information) The same check for the commented-out candidate:
-  one free frame when $57 >= 1.
+- **R24** The same with the burst check. Information only when the bound
+  has none (`bound1.lua`).
 
 **Every model state and input case, one frame each** (64,896 states, 136
 frames each: 68 input cases, each at x 96 and on the edge)
@@ -127,20 +133,20 @@ frames each: 68 input cases, each at x 96 and on the edge)
 
 ## What the model check confirms
 
-- **M1** `bound1.lua` loads, and the envelope's ramp matches its
-  `ramp_to_max_speed` at every speed.
+- **M1** The bound file loads, and the envelope's ramp projects as its
+  `ramp_to_max_speed` does at every speed, with and without the burst check.
 - **M2** The state set is closed: no input takes a state outside it.
 - **M3** No frame adds more than 456 to max(speed, 0).
 - **M4** The speed byte stays within -40..40.
 - **M5** Speed 25 is reached from below only on a ground frame, running.
 - **M6** `bound_x_position` equals the envelope's projection at every state.
-- **M7** bound1 holds frame by frame, for speed and distance, from every
+- **M7** The bound holds frame by frame, for speed and distance, from every
   state, at every k up to 60. This covers the speed-only bound and the latch
-  rule.
-- **M8** bound1 holds for projected scores, for both rates.
+  rule, each with and without the burst check.
+- **M8** The bound holds for projected scores, in the same four forms.
 - **M9** Each part is needed. Removing it lets some line beat the bound.
-- **M10** (information) Candidates: the commented-out free-frame rule, and
-  score-only variants.
+- **M10** (information) Candidates: score-only variants, and for
+  `bound1.lua` the burst check.
 - **M11** (information) The farthest the model allows from the 1-1 start.
 
 ## What this supports
@@ -155,16 +161,17 @@ steps:
      R22).
 2. **The model can only overstate the game.** In the model check, any frame
    may be a takeoff or a landing, and the edge clamp may come anywhere.
-3. **No line in the model beats bound1.** This holds from any state, within
-   60 frames, frame by frame and by score (M2-M8). Every ramp reaches full
-   speed well within 60 frames.
-4. **So bound1 holds for the game in this scope.** R23 also checks it
-   directly on the ROM, along sampled lines.
+3. **No line in the model beats the bound.** This holds from any state,
+   within 60 frames, frame by frame and by score (M2-M8). Every ramp reaches
+   full speed well within 60 frames.
+4. **So the bound holds for the game in this scope.** R23 and R24 also check
+   it directly on the ROM, along sampled lines.
 
 **Tightness.**
-- In the model, bound1 is reached exactly. The speed-only bound's closest
+- In the model, the bound is reached exactly. The speed-only bound's closest
   margin is 0 for speed, distance and score. The latch rule's is 0 frame by
-  frame and 1.1875 px by score (M7, M8).
+  frame and 1.1875 px by score (M7, M8). Both are the same with the burst
+  check.
 - Every rate and allowance in it is reached in the ROM, once R5-R14 pass.
 - Each part is needed (M9).
 
@@ -185,19 +192,21 @@ steps:
 
 ## Results
 
-**Model check, 2026-10-25: all claims hold.**
+**Model check, 2026-10-26: all claims hold,** for `bound2.lua` and for
+`bound1.lua`.
 - **Closest margins:** 0 for speed, distance and score (speed-only bound);
-  1.1875 px for the latch rule's score.
-- **Ceilings at the 1-1 start:** bound1 gives 123.9375 (speed only) and
-  115.6875 (latch rule).
+  1.1875 px for the latch rule's score. The same with the burst check.
+- **Ceilings at the 1-1 start:** 123.9375 (speed only) and 115.6875 (latch
+  rule). The burst check doesn't change them, since $57 is 0 there.
 - **What each part is needed for (M9):**
   - **Needed for scores:** the latch's 416 and max(v, 0).
   - **Needed frame by frame only:** the free frames, the edge push and the
     latch rule's speed test. Each one alone can be removed without any score
     beating the bound. Removing both the free frames and the edge push does
     fail, at 64 states.
-- **Candidates (M10):** one free frame when $57 >= 1 holds at both levels.
-  Its ceiling at the start is unchanged.
+  - **With the burst check:** its one free frame when $57 is nonzero is
+    needed frame by frame only; the latch rule's speed test becomes needed
+    for scores too (12 states).
 - **Reference (M11):** the farthest the model allows from the start is
   71.8125 px in 45 frames, so x 111.8125.
 
@@ -207,10 +216,12 @@ simple vertical motion), with faults injected:
 - a latch threshold of 29;
 - a 1/16 px extra edge lift;
 - movement by the fraction;
-- a bound with no free frames.
+- a bound with no free frames (`bound1.lua` and `bound2.lua`);
+- a burst check with no free frames when $57 is nonzero (R24 failed, R23
+  passed).
 
 Each fault failed the claims that test the behavior it changed. R1 fails in
-every stand-in run, because the stand-in has no real ROM; the clean run
-passed every other claim.
+every stand-in run, because the stand-in has no real ROM; the clean runs,
+one per bound file, passed every other claim.
 
-Open and untested claims are listed in `OPEN_CLAIMS.md`.
+Open and untested claims are listed in `OPEN_CLAIMS.md`.

@@ -1,15 +1,17 @@
 -- smb1_model_validation.lua
 -- Variant: exhaustive check of the acceleration bound against the model
 --
--- Checks 02_BoundAcceleration/bound1.lua against every state and input of
--- smbmodel.lua, up to K frames ahead. smb1_rom_validation.lua checks the
--- model against the ROM; this file checks the bound against the model.
--- Together they carry the bound's claims to the game (see README.md).
+-- Checks the bound in BOUND_FILE (02_BoundAcceleration/bound2.lua, with and
+-- without its burst check; bound1.lua also loads) against every state and
+-- input of smbmodel.lua, up to K frames ahead. smb1_rom_validation.lua
+-- checks the model against the ROM; this file checks the bound against the
+-- model. Together they carry the bound's claims to the game (see
+-- README.md).
 --
 -- Runs in Lua 5.1 or LuaJIT: under a minute in plain Lua 5.1, about 10
 -- seconds in LuaJIT. It needs no ROM, so it should also run from FCEUX's Lua
 -- window (not yet tried there). Keep this file next to smbmodel.lua and
--- bound1_harness.lua. Each claim prints what it checks and how, then PASS or
+-- bound_harness.lua. Each claim prints what it checks and how, then PASS or
 -- FAIL; a summary ends the run, and LOG_FILE gets a copy.
 --
 -- What "every state and input" means here: every state in the model's set
@@ -24,7 +26,7 @@
 -- === Settings ===============================================================
 
 local K = 60                -- frames ahead checked from every state
-local BOUND_FILE = "../02_BoundAcceleration/bound1.lua"
+local BOUND_FILE = "../02_BoundAcceleration/bound2.lua"
 local ABLATIONS = true      -- also check that each part of the bound is needed
 local SHOW = 3              -- examples printed per failed check
 local LOG_FILE = "smb1_model_validation_log.txt"   -- nil for no log
@@ -36,7 +38,7 @@ if debug and debug.getinfo then
   here = debug.getinfo(1, "S").source:match("^@(.*[/\\])") or ""
 end
 
--- bound1.lua reads RAM through `memory`. Outside FCEUX there is none, so
+-- The bound reads RAM through `memory`. Outside FCEUX there is none, so
 -- give it one that reads this table; inside FCEUX, use the same stand-in so
 -- the check reads the model's states, not the game's.
 local FAKE_RAM = {}
@@ -51,9 +53,10 @@ memory = {
 }
 
 local SM = dofile(here .. "smbmodel.lua")
-local H = dofile(here .. "bound1_harness.lua")
+local H = dofile(here .. "bound_harness.lua")
 local B, load_err = H.load(here .. BOUND_FILE)
 memory = real_memory
+local BOUND_NAME = BOUND_FILE:match("([^/\\]+)%.lua$") or BOUND_FILE
 
 local floor, max, min = math.floor, math.max, math.min
 
@@ -124,19 +127,20 @@ end
 R.say("SMB1 acceleration bound: exhaustive check against the model")
 R.say("Files tested (Adler-32 of each file's text, line endings ignored):")
 for _, f in ipairs({ "smb1_model_validation.lua", "smbmodel.lua",
-                     "bound1_harness.lua", BOUND_FILE }) do
+                     "bound_harness.lua", BOUND_FILE }) do
   R.say(string.format("  %s  %s", checksum(here .. f), here .. f))
 end
 R.say(string.format("Horizon: every k = 1..%d frames from every state", K))
 
 -- === M1. The bound file =====================================================
 
-local c = R.claim("M1", "bound1.lua loads, and this check's copy of its ramp"
-    .. " matches it", {
+local c = R.claim("M1", BOUND_NAME .. ".lua loads, and this check's copy of its"
+    .. " ramp matches it", {
   "Loads the bound file's own text and runs it. Then, at every starting",
-  "speed from -40 to +41 in steps of 1/256, for both walking rates, checks",
-  "that the envelope used below (speed and distance after each frame)",
-  "ramps exactly as bound1's ramp_to_max_speed does.",
+  "speed from -40 to +41 in steps of 1/256, for both walking rates, and",
+  "with and without the burst check if the bound has one, checks that the",
+  "envelope used below (speed and distance after each frame) projects",
+  "exactly as the bound's ramp_to_max_speed does.",
 })
 if not B then
   R.check(c, false, function() return tostring(load_err) end)
@@ -144,21 +148,27 @@ if not B then
   R.say("Cannot continue without the bound file.")
   return
 end
+-- The burst check (do_burst_check): one free frame when $57 is nonzero.
+local BURSTS = B.has_burst_check and { false, true } or { false }
 for i = -40 * 256, 41 * 256 do
   local v = i / 256
   for _, slower in ipairs({ false, true }) do
-    local env = H.envelope(B, v, slower, K)
-    local ok, why = H.matches(B, v, slower, env)
-    if ok and env.capped then c.n = c.n + 1
-    else R.check(c, false, function()
-      return why or "ramp never reaches max speed"
-    end) end
+    for _, burst in ipairs(BURSTS) do
+      local env = H.envelope(B, v, slower, K, { burst_check = burst })
+      local ok, why = H.matches(B, v, slower, env, burst)
+      if ok and env.capped then c.n = c.n + 1
+      else R.check(c, false, function()
+        return why or "ramp never reaches max speed"
+      end) end
+    end
   end
 end
 R.done(c, nil, string.format("constants: run %.4f, walk %.4f / %.4f below"
-    .. " %d, cap %d, free frames %d, edge %.4f px, projected to frame %d",
+    .. " %d, cap %d, free frames %d%s, edge %.4f px, projected to frame %d",
     B.RUN_ACCEL * 256, B.WALK_ACCEL * 256, B.SLOW_WALK_ACCEL * 256,
-    B.RUN_ACCEL_MIN_SPEED, B.MAX_SPEED, B.FREE_FRAMES, B.EDGE_PUSH_PX,
+    B.RUN_ACCEL_MIN_SPEED, B.MAX_SPEED, B.FREE_FRAMES,
+    B.has_burst_check and string.format(" (%d with the burst check, $57"
+        .. " nonzero)", B.FREE_FRAMES_IF_MOVING) or "", B.EDGE_PUSH_PX,
     B.PROJECT_TO_FRAME))
 
 -- === The state set and one-frame facts ======================================
@@ -255,7 +265,8 @@ R.done(c_cross)
 
 -- === The bound against every line, k = 1..K =================================
 
--- bound1's latch-rule test, run on its own code with the state in fake RAM.
+-- The bound's latch-rule test, run on its own code with the state in fake
+-- RAM.
 local function load_state(st)
   local byte, frac = SM.split(st[1])
   FAKE_RAM[0x0057] = byte % 256
@@ -268,13 +279,18 @@ local qualifies, bound_offset = {}, {}
 for b = 1, nb do
   load_state(states[b])
   qualifies[b] = B.qualifies_for_slower_ramp() and true or false
-  -- bound1's own projected position from x = 0 at frame 0, less cruising
-  -- at full speed from the start: the most it allows above cruising.
+  -- The bound's own projected position from x = 0 at frame 0, less
+  -- cruising at full speed from the start: the most it allows above
+  -- cruising. Indexed [use_latch_rule][do_burst_check].
   local cruise = B.PROJECT_TO_FRAME * B.PX_PER_FRAME_AT_MAX_SPEED
-  bound_offset[b] = {
-    [false] = B.bound_x_position(0, false) - cruise,
-    [true] = B.bound_x_position(0, true) - cruise,
-  }
+  bound_offset[b] = {}
+  for _, rule in ipairs({ false, true }) do
+    bound_offset[b][rule] = {}
+    for _, burst in ipairs({ false, true }) do
+      bound_offset[b][rule][burst] = B.bound_x_position(0, rule, burst)
+          - cruise
+    end
+  end
 end
 
 -- Bounds to check. Each gives, for a state, whether it applies there and
@@ -286,14 +302,22 @@ local function no_sign(b)
   if (not st[5]) and st[4] < 25 then return true end
   return nil
 end
-local function cand_ff(v) if floor(v) >= 1 then return 1 end return 2 end
 
+local BURST = { burst_check = true }
 local variants = {
-  { name = "bound1, speed only (416 below 25)", rate = always,
-    group = "main" },
-  { name = "bound1, latch rule (304 where it applies)", rate = by_rule,
+  { name = "speed only (416 below 25)", rate = always, group = "main" },
+  { name = "latch rule (304 where it applies)", rate = by_rule,
     group = "main" },
 }
+-- The burst check: part of the bound if it has one (bound2.lua's
+-- do_burst_check), otherwise a candidate.
+for _, v in ipairs({
+  { name = "speed only, with the burst check", rate = always, opts = BURST },
+  { name = "latch rule, with the burst check", rate = by_rule, opts = BURST },
+}) do
+  v.burst, v.group = true, B.has_burst_check and "main" or "candidate"
+  variants[#variants + 1] = v
+end
 if ABLATIONS then
   local abl = {
     { name = "no free frames", rate = always, opts = { free_frames = 0 } },
@@ -306,16 +330,21 @@ if ABLATIONS then
     { name = "no edge push on the first move", rate = always,
       opts = { no_edge = true } },
   }
+  if B.has_burst_check then
+    abl[#abl + 1] = { name = "burst check with no free frames when $57 is"
+        .. " nonzero", rate = always, opts = { free_frames_fn = function(v)
+          if floor(v) == 0 then return B.FREE_FRAMES end
+          return 0
+        end } }
+    abl[#abl + 1] = { name = "burst check, latch rule without the speed"
+        .. " >= 0 test", rate = no_sign, opts = BURST }
+  end
   for _, v in ipairs(abl) do
     v.group = "ablation"
     variants[#variants + 1] = v
   end
 end
 local cands = {
-  { name = "one free frame when $57 >= 1, speed only",
-    rate = always, opts = { free_frames_fn = cand_ff } },
-  { name = "one free frame when $57 >= 1, latch rule",
-    rate = by_rule, opts = { free_frames_fn = cand_ff } },
   { name = "no free frames and no edge push, speed only",
     rate = always, opts = { free_frames = 0, no_edge = true } },
   { name = "no free frames, no edge push, latch rule without the speed"
@@ -452,7 +481,9 @@ for b = 1, nb do
         local env, slower = envelope_for(v, b)
         if env then
           local lim = env.offset
-          if v.group == "main" then lim = bound_offset[b][slower] end
+          if v.group == "main" then
+            lim = bound_offset[b][slower][v.burst or false]
+          end
           note(v.res.score, b, g, 0, got, lim)
         end
       end
@@ -460,21 +491,25 @@ for b = 1, nb do
   end
 end
 
--- The envelope's offsets equal bound1's own bound_x_position.
-local c_off = R.claim("M6", "bound1's bound_x_position equals the envelope's"
-    .. " projection", {
-  "At every state, bound1's own bound_x_position (read from fake RAM), less",
-  "cruising at full speed, equals the envelope's offset, for both rates.",
+-- The envelope's offsets equal the bound's own bound_x_position.
+local c_off = R.claim("M6", BOUND_NAME .. "'s bound_x_position equals the"
+    .. " envelope's projection", {
+  "At every state, the bound's own bound_x_position (read from fake RAM),",
+  "less cruising at full speed, equals the envelope's offset, for both",
+  "rates, and with the burst check if the bound has one.",
 })
 for b = 1, nb do
   for _, slower in ipairs({ false, true }) do
-    local use = slower and qualifies[b]
-    local env = H.envelope(B, states[b][1] / 256, use, K)
-    R.check(c_off, math.abs(env.offset - bound_offset[b][slower]) < 1e-9,
-      function()
-        return state_text(states[b], true) .. string.format(": bound1 %.4f,"
-            .. " envelope %.4f", bound_offset[b][slower], env.offset)
+    for _, burst in ipairs(BURSTS) do
+      local use = slower and qualifies[b]
+      local env = H.envelope(B, states[b][1] / 256, use, K,
+          { burst_check = burst })
+      local lim = bound_offset[b][slower][burst]
+      R.check(c_off, math.abs(env.offset - lim) < 1e-9, function()
+        return state_text(states[b], true) .. string.format(": %s %.4f,"
+            .. " envelope %.4f", BOUND_NAME, lim, env.offset)
       end)
+    end
   end
 end
 R.done(c_off)
@@ -499,17 +534,20 @@ local function report(c, v, which, unit)
   end
 end
 
-local c_main = R.claim("M7", "bound1 holds frame by frame, from every state", {
+local c_main = R.claim("M7", BOUND_NAME .. " holds frame by frame, from every"
+    .. " state", {
   "For every state and every k up to the horizon, no line of k frames",
   "ends with a higher speed byte than the ramp's after k frames (speed),",
   "or moves farther than the ramp does in k frames (distance).",
   "Speed only: 416 below 25. Latch rule: 304 below 25, at the states",
-  "where bound1's qualifies_for_slower_ramp() is true (" ..
+  "where qualifies_for_slower_ramp() is true (" ..
       (function()
         local n = 0
         for b = 1, nb do if qualifies[b] then n = n + 1 end end
         return 2 * n
       end)() .. " of " .. 2 * nb .. ").",
+  B.has_burst_check and "With the burst check: one free frame where $57 is"
+      .. " nonzero." or "This bound has no burst check (see M10).",
   "A closest margin of 0 means some line reaches the bound exactly.",
 })
 for _, v in ipairs(variants) do
@@ -521,9 +559,9 @@ for _, v in ipairs(variants) do
 end
 R.done(c_main)
 
-local c_score = R.claim("M8", "bound1 holds for projected scores", {
+local c_score = R.claim("M8", BOUND_NAME .. " holds for projected scores", {
   "For every state: no line that reaches full speed within the horizon",
-  "scores more than bound1's bound_x_position allows. A line's score is",
+  "scores more than the bound's bound_x_position allows. A line's score is",
   "its position projected to PROJECT_TO_FRAME at full speed; the check",
   "compares how far each line gets beyond cruising at full speed.",
 })
@@ -536,14 +574,16 @@ end
 R.done(c_score)
 
 if ABLATIONS then
-  local c_need = R.claim("M9", "Each part of bound1 is needed", {
+  local c_need = R.claim("M9", "Each part of " .. BOUND_NAME .. " is needed", {
     "Each variant removes or loosens one part. A part is needed if some",
     "state beats the variant: frame by frame (speed or distance after k",
     "frames, the bound's per-frame claim) or by projected score (what",
     "pruning uses). Both are shown, with each variant's ceiling at the",
-    "1-1 start (x 40, speed 0, frame 0) for comparison.",
-    "bound1's ceilings at the start: speed only " .. start_ceiling(variants[1])
-        .. ", latch rule " .. start_ceiling(variants[2]) .. ".",
+    "1-1 start (x 40, speed 0, frame 0) for comparison. " .. BOUND_NAME
+        .. "'s:",
+    "speed only " .. start_ceiling(variants[1]) .. ", latch rule "
+        .. start_ceiling(variants[2]) .. " (with or without a burst check:",
+    "$57 is 0 at the start).",
   })
   for _, v in ipairs(variants) do
     if v.group == "ablation" then
@@ -563,12 +603,18 @@ if ABLATIONS then
   R.done(c_need)
 end
 
-local c_cand = R.claim("M10", "Candidates (information only, not bound1)", {
-  "Possible changes, checked like M7 and M8: the rule commented out in",
-  "bound1.lua's ramp, and a score-only bound without the parts M9 finds",
-  "unneeded for scores. A candidate that holds only by score would",
-  "still be sound for pruning, but not frame by frame.",
-})
+local how = { "Possible changes, checked like M7 and M8:" }
+if not B.has_burst_check then
+  how[#how + 1] = "  the burst check: one free frame when $57 is nonzero"
+      .. " (bound2.lua's"
+  how[#how + 1] = "  do_burst_check);"
+end
+how[#how + 1] = "  a score-only bound without the parts M9 finds unneeded for"
+    .. " scores."
+how[#how + 1] = "A candidate that holds only by score would still be sound for"
+how[#how + 1] = "pruning, but not frame by frame."
+local c_cand = R.claim("M10", "Candidates (information only, not part of "
+    .. BOUND_NAME .. ")", how)
 for _, v in ipairs(variants) do
   if v.group == "candidate" then
     local rs, rd, rc = v.res.speed, v.res.dist, v.res.score
