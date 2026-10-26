@@ -35,8 +35,9 @@ local EDGE_PUSH_PX    = 15 / 16        -- most the left-edge clamp (KeepOnscr) p
 -- hold. A turnaround (facing opposite the moving direction, then B plus that direction on the
 -- ground) holds one, at any speed. Two need $57 = 0: the Left+Right double charge (ProcSkid copies
 -- facing 3 into the moving direction, and ChkMoveDir resets it once $57 is nonzero) and the stale
--- $0700 at the left edge (KeepOnscr zeroes $57 but not $0700). Counting one when $57 is nonzero
--- rests on that argument, so it's optional (do_burst_check).
+-- $0700 at the left edge (KeepOnscr zeroes $57 but not $0700). The latch rule needs both too: the
+-- double charge starts from a state it accepts. Counting one when $57 is nonzero rests on that
+-- argument, so it's optional (do_burst_check).
 local FREE_FRAMES           = 2        -- the most any state holds ($57 = 0)
 local FREE_FRAMES_IF_MOVING = 1        -- the most with $57 nonzero
 

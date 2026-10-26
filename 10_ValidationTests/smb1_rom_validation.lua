@@ -33,12 +33,15 @@ local CFG = {
   sections = {
     setup = true,         -- R1-R4    the ROM, the start state, the controller
     witnesses = true,     -- R5-R16   exact sequences for each part of the bound
+    gotchas = true,       -- R29-R37  shortcuts and readings that fail, shown
     buttons = true,       -- R17      every combination of the 7 buttons
     edge = true,          -- R18      the left screen edge, at every subpixel
     jumps = true,         -- R19      every jump from the start lands cleanly
     play = true,          -- R20-R24  random play, in lockstep with the model
+    backgrounds = true,   -- R38      sampled states over other RAM backgrounds
     exhaustive = true,    -- R25-R28  every model state, every input case
   },
+  background_stride = 97, -- R38 checks every 97th state (about 670)
   exhaustive_stride = 1,  -- 1: every state; 50: a quick pass
   exhaustive_first = 1,   -- to resume a stopped run, start at this state
   exhaustive_last = nil,  -- nil: through the last state
@@ -201,6 +204,9 @@ G.RAM = {
   scroll_lock = 0x0723, -- ScrollLock
   y_high = 0x00B5,      -- Player_Y_HighPos
   for_scroll = 0x0755,  -- Player_Pos_ForScroll
+  enemy_flag = 0x000F,  -- Enemy_Flag, 5 slots: nonzero when active
+  enemy_page = 0x006E,  -- Enemy_PageLoc, 5 slots
+  enemy_x = 0x0087,     -- Enemy_X_Position, 5 slots
 }
 local A_ = G.RAM
 
@@ -633,7 +639,7 @@ local function section_witnesses()
     "Tests: holding Right+B from the start: the latch is clear on frame 32",
     "and set ($1C) on frame 33; the speed byte reaches $28 (40) on frame",
     "45 and stays there while the fraction keeps changing.",
-    "Supports: MAX_SPEED (40); the latch threshold the RAM rule relies on.",
+    "Supports: MAX_SPEED (40); the latch threshold the latch rule uses.",
   })
   witness(c, "Right+B", rep("RB", 50), {
     [2] = { s = 2, f = 0x14, fh = 0, fl = 0xE4 }, [32] = { R = 0 },
@@ -721,7 +727,7 @@ local function section_witnesses()
     "(facing turns left), then A+Right: each air frame adds 456 =",
     "228 ($E4) doubled, to 40, because facing (left) differs from the",
     "moving direction (right), and the air uses $E4 from $0700 = 25.",
-    "Supports: RUN_ACCEL (456) and RUN_ACCEL_MIN_SPEED (25).",
+    "Supports: RUN_ACCEL (456) and RUN_ACCEL_THRES (25).",
   })
   witness(c, "Right+B, Left, A+Right",
       cat(rep("RB", 29), { "L" }, rep("AR", 9)), {
@@ -947,6 +953,280 @@ local function section_witnesses()
   R.done(c)
 end
 
+-- === R29-R37. Gotchas =======================================================
+
+-- Each claim shows, on the ROM, a shortcut or reading of the code that looks
+-- right and isn't. "Rules out" names the wrong idea.
+
+local function adder_now() return rb(A_.adder_hi) * 256 + rb(A_.adder_lo) end
+
+local function section_gotchas()
+  local c, n
+
+  if not B then
+    R.skip("R29", "The latch rule needs both free frames", "bound file not"
+        .. " loaded: " .. tostring(bound_err))
+  else
+    c = R.claim("R29", "The latch rule needs both free frames", {
+      "Tests: R11's double charge. After Left+Right, B, Right, the state",
+      "passes qualifies_for_slower_ramp() (latch clear, $0700 below 25, not",
+      "moving left). The next two frames, Left+Right+B and Right+B, each",
+      "gain 456, so two frames on, the speed byte is above what the latch",
+      "rule's ramp with one free frame allows, and within " .. BOUND_NAME
+          .. "'s ramp.",
+      "Rules out: one free frame wherever the latch rule applies. That",
+      "holds for scores in the model (M10), not frame by frame.",
+      "Supports: FREE_FRAMES = 2 under the latch rule as well.",
+    })
+    G.load()
+    for _, keys in ipairs({ "LR", "B", "R" }) do G.press(keys) end
+    local v, g = B.get_xvel(), G.read()
+    local qualifies = B.qualifies_for_slower_ramp()
+    R.say("    after Left+Right, B, Right: " .. T.state(g.w, g.facing,
+        g.moving, g.abs, g.latch) .. "; qualifies: " .. tostring(qualifies))
+    R.check(c, qualifies, function()
+      return "the state doesn't qualify for the latch rule"
+    end)
+    local one = H.envelope(B, v, true, CFG.K, { free_frames = 1 })
+    local own = H.envelope(B, v, true, CFG.K)
+    local w0 = G.speed()
+    G.press("LRB")
+    local w1 = G.speed()
+    G.press("RB")
+    local w2 = G.speed()
+    local s = floor(w2 / 256)
+    R.say(string.format("    Left+Right+B: gain %d; Right+B: gain %d; speed"
+        .. " byte %d. Ramps two frames on: one free frame %d, %s %d",
+        w1 - w0, w2 - w1, s, one.byte[2], BOUND_NAME, own.byte[2]))
+    R.check(c, w1 - w0 == 456 and w2 - w1 == 456, function()
+      return "expected two gains of 456"
+    end)
+    R.check(c, s > one.byte[2] and s <= own.byte[2], function()
+      return "the speed byte is not above the one-free-frame ramp and"
+          .. " within the bound's"
+    end)
+    R.done(c)
+  end
+
+  c = R.claim("R30", "At speed byte 0, the fraction and moving direction 3"
+      .. " stay", {
+    "Tests: Left+Right, B, Right (speed 00:98, facing 1, moving 3), then 10",
+    "frames with no buttons: speed 00:98 and moving direction 3 on every",
+    "one. ImposeFriction tests only the speed byte, and ChkMoveDir sets the",
+    "moving direction only from a nonzero one. Then Right: ProcSkid copies",
+    "facing 1 into the moving direction.",
+    "Rules out: friction on the 16-bit speed, and moving direction 3",
+    "wearing off by itself.",
+    "Supports: smbmodel.lua's friction test; the double charge's setup.",
+  })
+  local expect = {}
+  for i = 3, 13 do expect[i] = { s = 0, f = 0x98, M = 3, F = 1 } end
+  expect[14] = { s = 1, f = 0x30, M = 1, F = 1 }
+  witness(c, "double charge setup, then no buttons",
+      cat({ "LR", "B", "R" }, rep("", 10), { "R" }), expect)
+  R.done(c)
+
+  c = R.claim("R31", "Walking caps at 24, even with the latch set", {
+    "Tests: Right+B until the latch sets, then Right alone. While",
+    "RunningTimer lasts Mario still runs; when it runs out, the cap drops",
+    "to 24 and the speed byte snaps to 24 in one frame, with adder $00D0:",
+    "the latch picks FrictionData's third entry, but the cap comes from",
+    "MaxRightXSpdData's second. It stays at 24 after.",
+    "Rules out: taking the cap from the friction index (MaxRightXSpdData's",
+    "third entry is 16).",
+    "Supports: smbmodel.lua's caps; WALK_ACCEL applies only below 25.",
+  })
+  G.load()
+  n = 0
+  while G.speed() < 28 * 256 and n < 80 do G.press("RB"); n = n + 1 end
+  G.press("RB")
+  local before, snapped = s8(rb(A_.speed)), nil
+  for t = 1, 20 do
+    G.press("R")
+    local s = s8(rb(A_.speed))
+    if not snapped and s == 24 and before > 24 then
+      snapped = { t = t, from = before, adder = adder_now(),
+                  latch = rb(A_.latch) }
+    end
+    before = s
+  end
+  if snapped then
+    R.say(string.format("    Right+B x%d, then Right: speed byte %d -> 24 on"
+        .. " Right frame %d, adder $%04X, latch $%02X; after 20 frames %d",
+        n + 1, snapped.from, snapped.t, snapped.adder, snapped.latch, before))
+  end
+  R.check(c, snapped and snapped.adder == 0xD0 and snapped.latch ~= 0
+      and before == 24, function()
+    return "expected a one-frame drop to 24 with adder $00D0 and the latch"
+        .. " set, staying at 24"
+  end)
+  R.done(c)
+
+  c = R.claim("R32", "A jump keeps the latch of its last ground frame", {
+    "Tests: Right+B from the start, then a jump (A+Right+B) on frame 33",
+    "or 34. R7's latch sets on frame 33, from $0700 at that frame's start.",
+    "A jump on frame 33 takes off at speed 28 or more with the latch clear,",
+    "and it stays clear in the air (GetPlayerAnimSpeed runs only on ground",
+    "frames); a jump on frame 34 carries it.",
+    "Rules out: the latch following the takeoff speed. Judged from takeoff",
+    "speeds the threshold looks like 29, as in JDaster64's chart; it is 28,",
+    "one ground frame earlier.",
+    "Supports: smbmodel.lua's latch timing; the latch rule's latch test.",
+  })
+  for _, t in ipairs({ 33, 34 }) do
+    G.load()
+    for _ = 1, t - 1 do G.press("RB") end
+    local w0 = G.speed()
+    G.press("ARB")
+    local air, latch, kept = rb(A_.state) ~= 0, rb(A_.latch), true
+    for _ = 1, 10 do
+      G.press("ARB")
+      if rb(A_.state) == 0 then break end
+      if rb(A_.latch) ~= latch then kept = false end
+    end
+    R.say(string.format("    jump on frame %d: takeoff speed %s, %s, latch"
+        .. " $%02X, %s in the air", t, T.speed(w0), air and "airborne"
+        or "STILL ON THE GROUND", latch, kept and "unchanged" or "CHANGED"))
+    R.check(c, air and kept and w0 >= 28 * 256
+        and (latch ~= 0) == (t == 34), function()
+      return string.format("frame %d: expected the latch %s", t,
+          t == 34 and "set" or "clear")
+    end)
+  end
+  R.done(c)
+
+  c = R.claim("R33", "From 25 up, running forward adds 228, not 456", {
+    "Tests: Right+B from the start: every frame that starts at speed byte",
+    "25 or more and ends below the cap adds exactly 228, adder $00E4.",
+    "Facing equals the moving direction, so $E4 isn't doubled.",
+    "Rules out: 456 every frame from 25 as the game's rate. The bound",
+    "allows it as an upper bound; 456 needs facing to differ (R10, R34).",
+    "Supports: the tighter rule from 25 up in OPEN_CLAIMS.md.",
+  })
+  G.load()
+  local frames = 0
+  for _ = 1, 60 do
+    local w0 = G.speed()
+    G.press("RB")
+    local w1 = G.speed()
+    if floor(w0 / 256) >= 25 and floor(w1 / 256) < 40 then
+      frames = frames + 1
+      R.check(c, w1 - w0 == 228 and adder_now() == 0xE4, function()
+        return string.format("from %s: gain %d, adder $%04X", T.speed(w0),
+            w1 - w0, adder_now())
+      end)
+    end
+  end
+  R.say(string.format("    %d frames from 25 to the cap", frames))
+  R.check(c, frames >= 10, function() return "too few frames from 25" end)
+  R.done(c)
+
+  c = R.claim("R34", "A turnaround holds one 456 frame, at any speed", {
+    "Tests: Right+B to speed bytes 12, 20 and 30, one frame of Left (facing",
+    "turns left, the moving direction stays right), then Right+B twice:",
+    "the first adds 456 ($E4 doubled: facing differs from the moving",
+    "direction), the second only 228 (facing is right again).",
+    "Rules out: no free frames for a moving state; the burst check keeps",
+    "one.",
+    "Supports: FREE_FRAMES_IF_MOVING = 1.",
+  })
+  for _, target in ipairs({ 12, 20, 30 }) do
+    G.load()
+    n = 0
+    while floor(G.speed() / 256) < target and n < 80 do
+      G.press("RB"); n = n + 1
+    end
+    G.press("L")
+    local g = G.read()
+    G.press("RB")
+    local w1, a1 = G.speed(), adder_now()
+    G.press("RB")
+    local w2 = G.speed()
+    R.say(string.format("    Right+B x%d, Left (%s, facing %d, moving %d),"
+        .. " Right+B: %+d (adder $%04X), Right+B: %+d", n, T.speed(g.w),
+        g.facing, g.moving, w1 - g.w, a1, w2 - w1))
+    R.check(c, g.facing == 2 and g.moving == 1 and w1 - g.w == 456
+        and a1 == 0x1C8 and w2 - w1 == 228, function()
+      return string.format("speed byte %d: expected Left to leave facing 2,"
+          .. " moving 1, then +456 and +228", target)
+    end)
+  end
+  R.done(c)
+
+  -- Written states for R35-R37: on the ground at x 96, facing and moving
+  -- right, latch clear unless given, RunningTimer as given.
+  local function one_frame(w, abs, latch, timer, keys)
+    G.load()
+    G.put(w, 1, 1, abs, latch, { ground = true, pixel = 0x60,
+                                 timer = timer })
+    G.press(keys)
+    return G.read()
+  end
+
+  c = R.claim("R35", "RunningTimer keeps Mario running only from 2 up", {
+    "Tests (states written into RAM): speed 10, facing and moving right,",
+    "Right alone, with RunningTimer 2 and 1 before the frame. At 2 the",
+    "running rules apply (adder $00E4, +228); at 1 the walking rules do",
+    "($0098, +152): the timer counts down before the game logic reads it.",
+    "Rules out: any nonzero RunningTimer allowing a run.",
+    "Supports: smbmodel.lua's run_ok (B, or RunningTimer 2 or more).",
+  })
+  for _, e in ipairs({ { timer = 2, adder = 0xE4 }, { timer = 1,
+                                                      adder = 0x98 } }) do
+    local g = one_frame(10 * 256, 10, false, e.timer, "R")
+    R.say(string.format("    RunningTimer %d, Right: speed %s (%+d), adder"
+        .. " $%04X", e.timer, T.speed(g.w), g.w - 10 * 256, g.adder))
+    R.check(c, g.adder == e.adder and g.w - 10 * 256 == e.adder, function()
+      return string.format("RunningTimer %d: expected adder $%04X", e.timer,
+          e.adder)
+    end)
+  end
+  R.done(c)
+
+  c = R.claim("R36", "Down hides Left/Right only from the acceleration", {
+    "Tests (states written into RAM), on the ground facing and moving",
+    "right. Down+Left at speed 5: the skid reset (ProcSkid) still sees",
+    "Left and zeroes the speed, though the acceleration sees no direction.",
+    "Down+Right at speed 20 with the latch set: the latch clears, since",
+    "Right matches the moving direction.",
+    "Rules out: Down cancelling Left/Right everywhere on the ground.",
+    "Supports: smbmodel.lua's raw buttons for the latch and skid checks.",
+  })
+  local g = one_frame(5 * 256, 5, false, 0, "DL")
+  R.say("    speed 5, Down+Left: " .. T.state(g.w, g.facing, g.moving, g.abs,
+      g.latch))
+  R.check(c, g.w == 0 and g.moving == 1 and g.facing == 1, function()
+    return "expected speed 00:00, facing and moving still right"
+  end)
+  g = one_frame(20 * 256, 20, true, 0, "DR")
+  R.say("    speed 20, latch set, Down+Right: " .. T.state(g.w, g.facing,
+      g.moving, g.abs, g.latch))
+  R.check(c, not g.latch and floor(g.w / 256) == 19, function()
+    return "expected the latch clear and the speed slowing (Right unseen)"
+  end)
+  R.done(c)
+
+  c = R.claim("R37", "$0700 of 33 or more picks $D0 without the latch", {
+    "Tests (states written into RAM): on the ground, latch clear, facing",
+    "and moving right, RunningTimer 0, Right alone, at speed 32 and 33.",
+    "At 32 the walking adder is $0098; at 33 it is $00D0, as if the latch",
+    "were set ($0700 >= $21). Both snap to the walking cap of 24.",
+    "Rules out: $D0 only with the latch set.",
+    "Supports: smbmodel.lua's adder choice; WALK_ACCEL's conditions.",
+  })
+  for _, e in ipairs({ { speed = 32, adder = 0x98 }, { speed = 33,
+                                                      adder = 0xD0 } }) do
+    g = one_frame(e.speed * 256, e.speed, false, 0, "R")
+    R.say(string.format("    speed %d, Right: speed %s, adder $%04X", e.speed,
+        T.speed(g.w), g.adder))
+    R.check(c, g.adder == e.adder and floor(g.w / 256) == 24, function()
+      return string.format("speed %d: expected adder $%04X and speed byte 24",
+          e.speed, e.adder)
+    end)
+  end
+  R.done(c)
+end
+
 -- === R17. Every button combination ==========================================
 
 local BITS = { "R", "L", "U", "D", "A", "B", "S" }
@@ -1162,8 +1442,9 @@ local function section_play()
     "left edge; the edge never moves left; when it moves right, it moves",
     "no more than Mario did that frame and he ends 64 px or more clear of",
     "it; he stays short of the right-edge clamp (239 px); no wall or floor",
-    "pushes him (SideCollisionTimer 0, collision bits $FF); normal play,",
-    "small Mario.",
+    "pushes him (SideCollisionTimer 0, collision bits $FF); no active",
+    "enemy comes within 24 px, and he stays short of the first ? block",
+    "(x 256); normal play, small Mario.",
     "Supports: the bound's distance rule (the edge never carries Mario",
     "past where his own moves and one 15/16 px clamp could); the scope.",
   })
@@ -1200,8 +1481,9 @@ local function section_play()
     R.skip("R24", "The burst check", "bound file not loaded")
   end
 
-  local K, P = CFG.K, (B and B.PROJECT_TO_FRAME or 45)
+  local K, P = CFG.K, (B and B.SCORING_FRAME or 45)
   local most_right, started = 0, os.time()
+  local enemy_gap, max_x = nil, 0
   for run = 1, CFG.play_runs do
     local setup = SETUPS[(run - 1) % #SETUPS + 1]
     local ctx, line, hist = {}, {}, {}
@@ -1239,7 +1521,7 @@ local function section_play()
         h.bscore304 = B.bound_x_position(j, true, true)
       else
         -- A candidate: the score its envelope allows, as M6 relates them.
-        local base = h.pos / 256 + (P - j) * B.PX_PER_FRAME_AT_MAX_SPEED
+        local base = h.pos / 256 + (P - j) * B.MAX_SPEED_IN_PX
         h.bscore416 = base + h.b416.offset
         h.bscore304 = h.b304 and base + h.b304.offset or h.bscore416
       end
@@ -1295,6 +1577,18 @@ local function section_play()
       if rb(A_.engine) ~= 8 or rb(A_.oper_mode) ~= 1 or rb(A_.size) ~= 1 then
         scope[#scope + 1] = "left normal play as small Mario"
       end
+      if x > max_x then max_x = x end
+      if x + 16 > 256 then scope[#scope + 1] = "within reach of the ? block" end
+      for slot = 0, 4 do
+        if rb(A_.enemy_flag + slot) ~= 0 then
+          local gap = math.abs(rb(A_.enemy_page + slot) * 256
+              + rb(A_.enemy_x + slot) - x)
+          if not enemy_gap or gap < enemy_gap then enemy_gap = gap end
+          if gap < 24 then
+            scope[#scope + 1] = string.format("an enemy %d px away", gap)
+          end
+        end
+      end
       if #scope == 0 then R.pass(c_scope) else
         R.fail(c_scope, where .. ": " .. table.concat(scope, "; "))
         break
@@ -1303,7 +1597,7 @@ local function section_play()
       if B then
         local s = s8(rb(A_.speed))
         local capped = s >= B.MAX_SPEED
-        local score = after.pos / 256 + (P - t) * B.PX_PER_FRAME_AT_MAX_SPEED
+        local score = after.pos / 256 + (P - t) * B.MAX_SPEED_IN_PX
         for j = max(0, t - K), t - 1 do
           local h, k = hist[j], t - j
           local moved = (after.pos - h.pos) / 256
@@ -1358,19 +1652,20 @@ local function section_play()
   end
   R.done(c_lock)
   R.done(c_set)
-  R.done(c_scope, nil, string.format("farthest right of the edge: %d px",
-      most_right))
+  R.done(c_scope, nil, string.format("farthest right of the edge: %d px;"
+      .. " farthest x: %d; closest enemy: %s", most_right, max_x,
+      enemy_gap and (enemy_gap .. " px") or "none active"))
   if c_bound then
     R.done(c_bound)
     R.done(c_burst, nil, c_burst.info and "(information only)" or nil)
   end
 end
 
--- === R25-R28. Exhaustive one-frame comparison ===============================
-
-local function section_exhaustive(states)
-  -- Left/Right; then the other-button and RunningTimer cases: nothing
-  -- (timer 0 or 10), Select (a non-A button that isn't B), or B.
+-- The input cases for one frame. On the ground: Left/Right; Down or not; the
+-- other-button and RunningTimer cases: nothing (timer 0 or 10), Select (a
+-- non-A button that isn't B), or B; A newly pressed or not. In the air:
+-- Left/Right only (R17 checks the other buttons don't matter there).
+local function input_cases()
   local LRS = { "", "R", "L", "LR" }
   local MIDS = {
     { keys = "", timer = 0 }, { keys = "", timer = 10 },
@@ -1388,6 +1683,72 @@ local function section_exhaustive(states)
     end
     air_cases[#air_cases + 1] = { keys = lr, timer = 0 }
   end
+  return ground_cases, air_cases
+end
+
+-- === R38. The RAM the model ignores =========================================
+
+local function section_backgrounds(states)
+  local ground_cases, air_cases = input_cases()
+  local stride = CFG.background_stride
+  local n_states = floor((#states - 1) / stride) + 1
+  local c = R.claim("R38", "One frame doesn't depend on RAM the model"
+      .. " ignores", {
+    string.format("Tests: R25's comparison for every %dth state (%d), with",
+        stride, n_states),
+    "all its input cases, written over three other backgrounds instead of",
+    "the start: 37 and 113 frames of standing (other frame counter, timers",
+    "and random numbers), and a run right and a stop (screen scrolled,",
+    "Mario elsewhere). Each 96 px right of the screen's left edge, with a",
+    "random subpixel. The next state, adder, move and jump must match the",
+    "model.",
+    "Rules out: hidden inputs (the frame counter, timers, random numbers,",
+    "the screen position, the subpixel away from the edge).",
+    "Supports: R25-R28 use one background and subpixel 0.",
+  })
+  local bgs = {}
+  for _, b in ipairs({ { "37 frames standing", rep("", 37) },
+                       { "113 frames standing", rep("", 113) },
+                       { "a run right and a stop",
+                         cat(rep("RB", 40), rep("", 30)) } }) do
+    G.load()
+    for _, keys in ipairs(b[2]) do G.press(keys) end
+    local save = (savestate.object or savestate.create)()
+    savestate.save(save)
+    emu.frameadvance()    -- FCEUX writes a Lua savestate at a frame boundary
+    bgs[#bgs + 1] = { name = b[1], save = save, screen = G.screen() }
+  end
+  for i = 1, #states, stride do
+    local st = states[i]
+    for g = 1, 2 do
+      local ground = (g == 1)
+      for _, cs in ipairs(ground and ground_cases or air_cases) do
+        for _, bg in ipairs(bgs) do
+          savestate.load(bg.save)
+          local px, sub = bg.screen + 0x60, 16 * math.random(0, 15)
+          G.put(st[1], st[2], st[3], st[4], st[5],
+              { ground = ground, pixel = px, sub = sub, timer = cs.timer })
+          local before = { w = st[1], facing = st[2], moving = st[3],
+                           abs = st[4], latch = st[5], ground = ground,
+                           timer = cs.timer, prevA = false,
+                           pos = px * 256 + sub }
+          G.press(cs.keys)
+          local problems = M.compare(before, cs.keys, G.read(), "one")
+          if #problems == 0 then R.pass(c) else
+            R.fail(c, string.format("state %d over %s: %s: %s", i, bg.name,
+                M.before_text(before, cs.keys), problems[1][2]))
+          end
+        end
+      end
+    end
+  end
+  R.done(c)
+end
+
+-- === R25-R28. Exhaustive one-frame comparison ===============================
+
+local function section_exhaustive(states)
+  local ground_cases, air_cases = input_cases()
   local first = CFG.exhaustive_first
   local last = CFG.exhaustive_last or #states
   local stride = CFG.exhaustive_stride
@@ -1499,8 +1860,8 @@ for _, f in ipairs({ "smb1_rom_validation.lua", "smbmodel.lua",
 end
 if not B then R.say("Bound NOT LOADED: " .. tostring(bound_err)) end
 local s = {}
-for _, name in ipairs({ "setup", "witnesses", "buttons", "edge", "jumps",
-                        "play", "exhaustive" }) do
+for _, name in ipairs({ "setup", "witnesses", "gotchas", "buttons", "edge",
+                        "jumps", "play", "backgrounds", "exhaustive" }) do
   if CFG.sections[name] then s[#s + 1] = name end
 end
 R.say("Sections: " .. table.concat(s, ", ") .. string.format("; exhaustive"
@@ -1514,10 +1875,12 @@ end
 local states = SM.states()
 if CFG.sections.setup then section_setup() end
 if CFG.sections.witnesses then section_witnesses() end
+if CFG.sections.gotchas then section_gotchas() end
 if CFG.sections.buttons then section_buttons(states) end
 if CFG.sections.edge then section_edge() end
 if CFG.sections.jumps then section_jumps() end
 if CFG.sections.play then section_play() end
+if CFG.sections.backgrounds then section_backgrounds(states) end
 if CFG.sections.exhaustive then section_exhaustive(states) end
 
 R.say("")

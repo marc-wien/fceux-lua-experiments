@@ -17,13 +17,13 @@
 local H = {}
 
 -- What the checks use. Each entry lists the names a bound file may give it:
--- bound1.lua's first (the name the checks use), then bound2.lua's.
+-- bound2.lua's first (the name the checks use), then bound1.lua's.
 H.NAMES = {
-  { "PROJECT_TO_FRAME", "SCORING_FRAME" },
+  { "SCORING_FRAME", "PROJECT_TO_FRAME" },
   { "MAX_SPEED" },
-  { "PX_PER_FRAME_AT_MAX_SPEED", "MAX_SPEED_IN_PX" },
+  { "MAX_SPEED_IN_PX", "PX_PER_FRAME_AT_MAX_SPEED" },
   { "RUN_ACCEL" },
-  { "RUN_ACCEL_MIN_SPEED", "RUN_ACCEL_THRES" },
+  { "RUN_ACCEL_THRES", "RUN_ACCEL_MIN_SPEED" },
   { "WALK_ACCEL" }, { "SLOW_WALK_ACCEL" }, { "EDGE_PUSH_PX" },
   { "FREE_FRAMES" },
   { "get_xpos" }, { "get_xvel" }, { "max_position_at_frame" },
@@ -78,10 +78,10 @@ end
 -- limit dist[k] in px. It repeats the bound's ramp_to_max_speed step by
 -- step: the free frames (FREE_FRAMES, or with the burst check
 -- FREE_FRAMES_IF_MOVING when $57 is nonzero) and every frame from
--- RUN_ACCEL_MIN_SPEED get RUN_ACCEL, the rest the walking rate; each
+-- RUN_ACCEL_THRES get RUN_ACCEL, the rest the walking rate; each
 -- frame accelerates, then moves floor(speed)/16 px; the first move counts
 -- at least EDGE_PUSH_PX; the frame that reaches MAX_SPEED and every frame
--- after it moves at PX_PER_FRAME_AT_MAX_SPEED, as the bound's projection
+-- after it moves at MAX_SPEED_IN_PX, as the bound's projection
 -- counts them.
 --
 -- opts:
@@ -103,7 +103,7 @@ function H.envelope(B, v, slower, K, opts)
   if opts.free_frames_fn then free = opts.free_frames_fn(v) end
   local speed = math.max(v, 0)
   if opts.from_raw_speed then speed = v end
-  local cruise = B.PX_PER_FRAME_AT_MAX_SPEED
+  local cruise = B.MAX_SPEED_IN_PX
   local byte, dist = {}, {}
   local d, capped, ramp_frames, ramp_px = 0, false, 0, 0
   for k = 1, K do
@@ -112,7 +112,7 @@ function H.envelope(B, v, slower, K, opts)
       move = cruise
     else
       local accel = walk
-      if k <= free or speed >= B.RUN_ACCEL_MIN_SPEED then
+      if k <= free or speed >= B.RUN_ACCEL_THRES then
         accel = B.RUN_ACCEL
       end
       speed = speed + accel
@@ -146,7 +146,7 @@ end
 function H.matches(B, v, slower, env, burst)
   local reduced = burst and math.floor(v) ~= 0
   local px, frames = B.ramp_to_max_speed(v, slower, reduced)
-  local offset = px - frames * B.PX_PER_FRAME_AT_MAX_SPEED
+  local offset = px - frames * B.MAX_SPEED_IN_PX
   if math.abs(offset - env.offset) < 1e-9 and (frames == env.ramp_frames
       or frames == env.ramp_frames + 1) then
     return true

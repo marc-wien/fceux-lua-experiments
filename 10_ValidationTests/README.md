@@ -26,14 +26,15 @@ first mismatches in full.
 |---|---|
 | `smbmodel.lua` | The model: one frame of horizontal physics, from SMBDIS.ASM |
 | `bound_harness.lua` | Loads `bound1.lua` or `bound2.lua`; gives the per-frame envelope of its ramp |
-| `smb1_rom_validation.lua` | The FCEUX suite, claims R1-R28 |
+| `smb1_rom_validation.lua` | The FCEUX suite, claims R1-R38 |
 | `smb1_model_validation.lua` | The model check, claims M1-M11 |
 | `OPEN_CLAIMS.md` | Claims not yet confirmed in the ROM, and ideas for tightening |
 
 **Running.**
 - *ROM suite:* FCEUX 2.x with the NTSC ROM, and "Allow Left+Right / Up+Down"
   ticked. Power on, then run the script.
-  - Everything except R25-R28 should take minutes.
+  - Everything except R25-R28 should take minutes. R38 runs about 137,000
+    single frames; set `background_stride` higher for a quicker pass.
   - R25-R28 run about 8.8 million single frames. Expect hours; the suite
     prints an estimate. Set `exhaustive_stride = 50` for a quick pass first.
   - The suite writes `smb1_rom_validation_log.txt`. Commit it as the record.
@@ -43,14 +44,9 @@ first mismatches in full.
 - Each log starts with a checksum of every file it tested, so it records
   exactly which versions passed.
 
-**The model.** `smbmodel.lua` has the same `step` as the version checked
-against the ROM on Oct 10 (committed as 73261d4). Every one of that version's
-outputs matches over all 64,896 states, on the ground and in the air, and
-every input value. The revision made these changes:
-- rewrote the comments;
-- dropped an alternative bound and proof potential that were stored there;
-- added two outputs: the adder chosen and whether it was applied;
-- added `SM.states()`, which lists the state set.
+**The model.** Nothing here vouches for `smbmodel.lua` except the ROM
+suite: R20 and R25-R28 compare it with the ROM frame by frame, and R38 over
+other backgrounds.
 
 ## What the ROM suite confirms
 
@@ -91,6 +87,24 @@ Each shows a value the bound must allow, so that value can't be lowered.
 - **R16** Down cancels Left/Right on the ground; facing is fixed in the air;
   Left+Right at 11+ walks at 304.
 
+**Gotchas: shortcuts and readings that fail, shown live.** Each claim says
+what it rules out.
+- **R29** The latch rule needs both free frames: R11's double charge starts
+  from a state the latch rule accepts.
+- **R30** At speed byte 0, the fraction and moving direction 3 stay with no
+  input, because friction tests only the speed byte.
+- **R31** Walking caps at 24 even with the latch set; the cap doesn't follow
+  the friction index.
+- **R32** A jump keeps the latch of its last ground frame, so a takeoff at
+  28.8 can be unlatched. From takeoff speeds the threshold looks like 29.
+- **R33** From 25 up, running forward adds 228, not 456.
+- **R34** A turnaround holds one 456 frame, at speeds 12, 20 and 30.
+- **R35** RunningTimer keeps Mario running only from 2 up: it counts down
+  before the game reads it.
+- **R36** Down hides Left/Right only from the acceleration: the latch and the
+  skid reset still see them.
+- **R37** $0700 of 33 or more picks $D0 without the latch.
+
 **Inputs, the edge and jumps**
 - **R17** For 300 random states, across all 128 combinations of the seven
   buttons, at random RunningTimer and previous-A values, only the inputs the
@@ -113,6 +127,7 @@ Each shows a value the bound must allow, so that value can't be lowered.
   - the edge never moves left, and moves right no more than Mario did;
   - Mario never reaches the right-edge clamp;
   - no wall or floor pushes him;
+  - no enemy comes within 24 px, and he stays short of the first ? block;
   - play stays normal, with small Mario.
 - **R23** The bound holds, frame by frame and by projected score, for the
   speed-only bound and the latch rule.
@@ -130,6 +145,11 @@ frames each: 68 input cases, each at x 96 and on the edge)
   edge.
 - **R28** A jump starts on the frame A is newly pressed, and that frame uses
   the air rules.
+
+**Over other RAM** (every 97th state, all input cases)
+- **R38** The same comparison over three other backgrounds (other frame
+  counter, timers, random numbers and screen position) and random subpixels
+  away from the edge.
 
 ## What the model check confirms
 
@@ -155,7 +175,7 @@ frames each: 68 input cases, each at x 96 and on the edge)
 steps:
 1. **The model is the ROM.** In every state the game reaches here, one frame
    of the ROM equals one frame of the model:
-   - single frames: R25-R28, R17 and R18;
+   - single frames: R25-R28, R17, R18 and R38;
    - along real lines: R20;
    - the game stays inside the model's state set (R21) and in scope (R19,
      R22).
@@ -172,7 +192,8 @@ steps:
   margin is 0 for speed, distance and score. The latch rule's is 0 frame by
   frame and 1.1875 px by score (M7, M8). Both are the same with the burst
   check.
-- Every rate and allowance in it is reached in the ROM, once R5-R14 pass.
+- Every rate and allowance in it is reached in the ROM, once R5-R14 and R34
+  pass.
 - Each part is needed (M9).
 
 **What it doesn't cover.**
@@ -181,9 +202,10 @@ steps:
 - **Vertical motion is not modeled,** only over-approximated. Landing depth is
   checked for jumps from the start (R19) and along real play.
 - **R25-R28 use one button combination per input case,** with RunningTimer
-  0 or 10, A not held the frame before, and the subpixel at 0. R17 samples
-  all 128 combinations and every timer value; R18 covers every subpixel at
-  the edge; R20 covers real subpixels in play.
+  0 or 10, A not held the frame before, the start's background and the
+  subpixel at 0. R17 samples all 128 combinations and every timer value; R18
+  covers every subpixel at the edge; R38 samples other backgrounds and
+  subpixels; R20 covers real play.
 - **R20-R24 sample lines rather than enumerate them.** The exhaustive
   argument is the chain above.
 - **Positions are not modeled.** The distance argument relies on R22: the
@@ -207,21 +229,12 @@ steps:
   - **With the burst check:** its one free frame when $57 is nonzero is
     needed frame by frame only; the latch rule's speed test becomes needed
     for scores too (12 states).
+- **Candidates (M10):** one free frame wherever the latch rule applies holds
+  by score (closest 0.5625 px; latch-rule ceiling at the start 114.6875), but
+  not frame by frame (68,992 pairs; R29 shows such a line).
 - **Reference (M11):** the farthest the model allows from the start is
   71.8125 px in 45 frames, so x 111.8125.
 
-**ROM suite:** not yet run on the ROM. Before committing, the scripts were
-tested offline against a stand-in emulator (not in the repo: the model plus
-simple vertical motion), with faults injected:
-- a latch threshold of 29;
-- a 1/16 px extra edge lift;
-- movement by the fraction;
-- a bound with no free frames (`bound1.lua` and `bound2.lua`);
-- a burst check with no free frames when $57 is nonzero (R24 failed, R23
-  passed).
-
-Each fault failed the claims that test the behavior it changed. R1 fails in
-every stand-in run, because the stand-in has no real ROM; the clean runs,
-one per bound file, passed every other claim.
+**ROM suite:** not yet run on the ROM. Its log will be the record.
 
 Open and untested claims are listed in `OPEN_CLAIMS.md`.

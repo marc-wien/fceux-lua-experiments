@@ -166,10 +166,10 @@ end
 R.done(c, nil, string.format("constants: run %.4f, walk %.4f / %.4f below"
     .. " %d, cap %d, free frames %d%s, edge %.4f px, projected to frame %d",
     B.RUN_ACCEL * 256, B.WALK_ACCEL * 256, B.SLOW_WALK_ACCEL * 256,
-    B.RUN_ACCEL_MIN_SPEED, B.MAX_SPEED, B.FREE_FRAMES,
+    B.RUN_ACCEL_THRES, B.MAX_SPEED, B.FREE_FRAMES,
     B.has_burst_check and string.format(" (%d with the burst check, $57"
         .. " nonzero)", B.FREE_FRAMES_IF_MOVING) or "", B.EDGE_PUSH_PX,
-    B.PROJECT_TO_FRAME))
+    B.SCORING_FRAME))
 
 -- === The state set and one-frame facts ======================================
 
@@ -282,7 +282,7 @@ for b = 1, nb do
   -- The bound's own projected position from x = 0 at frame 0, less
   -- cruising at full speed from the start: the most it allows above
   -- cruising. Indexed [use_latch_rule][do_burst_check].
-  local cruise = B.PROJECT_TO_FRAME * B.PX_PER_FRAME_AT_MAX_SPEED
+  local cruise = B.SCORING_FRAME * B.MAX_SPEED_IN_PX
   bound_offset[b] = {}
   for _, rule in ipairs({ false, true }) do
     bound_offset[b][rule] = {}
@@ -345,6 +345,8 @@ if ABLATIONS then
   end
 end
 local cands = {
+  { name = "latch rule with one free frame", rate = by_rule,
+    opts = { free_frames = 1 } },
   { name = "no free frames and no edge push, speed only",
     rate = always, opts = { free_frames = 0, no_edge = true } },
   { name = "no free frames, no edge push, latch rule without the speed"
@@ -385,8 +387,8 @@ local b_start = index[key(0, 1, 0, 0, false)]
 local function start_ceiling(v)
   local env = v.env[b_start]
   if not env then return "n/a" end
-  return string.format("%.4f", 40 + B.PROJECT_TO_FRAME
-      * B.PX_PER_FRAME_AT_MAX_SPEED + env.offset)
+  return string.format("%.4f", 40 + B.SCORING_FRAME * B.MAX_SPEED_IN_PX
+      + env.offset)
 end
 
 local function note(r, b, g, k, got, lim)
@@ -562,7 +564,7 @@ R.done(c_main)
 local c_score = R.claim("M8", BOUND_NAME .. " holds for projected scores", {
   "For every state: no line that reaches full speed within the horizon",
   "scores more than the bound's bound_x_position allows. A line's score is",
-  "its position projected to PROJECT_TO_FRAME at full speed; the check",
+  "its position projected to SCORING_FRAME at full speed; the check",
   "compares how far each line gets beyond cruising at full speed.",
 })
 for _, v in ipairs(variants) do
@@ -609,6 +611,9 @@ if not B.has_burst_check then
       .. " (bound2.lua's"
   how[#how + 1] = "  do_burst_check);"
 end
+how[#how + 1] = "  one free frame wherever the latch rule applies (R29 shows a"
+    .. " line it"
+how[#how + 1] = "  misses frame by frame);"
 how[#how + 1] = "  a score-only bound without the parts M9 finds unneeded for"
     .. " scores."
 how[#how + 1] = "A candidate that holds only by score would still be sound for"
