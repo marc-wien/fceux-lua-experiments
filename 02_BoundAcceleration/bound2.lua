@@ -22,14 +22,14 @@
 -- (References/SMBDIS.ASM.txt). 10_ValidationTests checks each rule here against a model of the
 -- game, and the model against the ROM.
 
-local SCORING_FRAME   = 45             -- frame that scores are projected to
-local MAX_SPEED       = 40             -- running cap of $57: MaxRightXSpdData $28
-local MAX_SPEED_IN_PX = MAX_SPEED / 16 -- 2.5 px per frame
-local RUN_ACCEL_THRES = 25             -- RUN_ACCEL every frame from here (in air, $0700 >= $19)
-local RUN_ACCEL       = 456 / 256      -- $E4 doubled: the largest
-local WALK_ACCEL      = 416 / 256      -- $D0 doubled: most below 25 (latch set or $0700 >= $21)
-local SLOW_WALK_ACCEL = 304 / 256      -- $98 doubled: most below 25 (latch clear, $0700 < $21)
-local EDGE_PUSH_PX    = 15 / 16        -- most the left-edge clamp (KeepOnscr) pushes Mario ahead
+local SCORING_FRAME   = 45              -- frame that scores are projected to
+local MAX_SPEED       = 40              -- running cap of $57: MaxRightXSpdData $28
+local MAX_SPEED_IN_PX = MAX_SPEED / 16  -- 2.5 px per frame
+local RUN_ACCEL_THRES = 25              -- RUN_ACCEL every frame from here (in air, $0700 >= $19)
+local RUN_ACCEL       = 456 / 256       -- $E4 doubled: the largest
+local WALK_ACCEL      = 416 / 256       -- $D0 doubled: most below 25 (latch set or $0700 >= $21)
+local SLOW_WALK_ACCEL = 304 / 256       -- $98 doubled: most below 25 (latch clear, $0700 < $21)
+local EDGE_PUSH_PX    = 15 / 16         -- most the left-edge clamp (KeepOnscr) pushes Mario ahead
 
 -- Free frames: the ramp's first frames get RUN_ACCEL at any speed, for bursts a state may already
 -- hold. A turnaround (facing opposite the moving direction, then B plus that direction on the
