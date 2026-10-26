@@ -611,7 +611,7 @@ if not B.has_burst_check then
       .. " (bound2.lua's"
   how[#how + 1] = "  do_burst_check);"
 end
-how[#how + 1] = "  one free frame wherever the latch rule applies (R29 shows a"
+how[#how + 1] = "  one free frame wherever the latch rule applies (R17 shows a"
     .. " line it"
 how[#how + 1] = "  misses frame by frame);"
 how[#how + 1] = "  a score-only bound without the parts M9 finds unneeded for"

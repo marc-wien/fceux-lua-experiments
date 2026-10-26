@@ -4,9 +4,11 @@
 -- Checks, on the real ROM, the game behavior that the acceleration bound
 -- (02_BoundAcceleration/bound2.lua, or bound1.lua) and its model
 -- (smbmodel.lua) rely on.
--- Each claim prints what it tests, how, and what it supports, then PASS or
--- FAIL, with the first mismatches in full. README.md lists the claims and
--- what they add up to.
+-- Each claim states a behavior of the ROM and shows it: it prints what it
+-- tests, how, and what it supports, then the evidence, then PASS or FAIL,
+-- with the first mismatches in full. The log opens with a legend for
+-- reading it and ends with a summary of every claim; README.md explains
+-- both and what the claims add up to.
 --
 -- How to run
 --   1. FCEUX 2.x with the NTSC Super Mario Bros. ROM. In Config > Input,
@@ -22,7 +24,7 @@
 -- prints an estimate as it goes. Try CFG.exhaustive_stride = 50 first for a
 -- quick pass.
 --
--- Reading the output: button letters are R Right, L Left, U Up, D Down, A,
+-- Notation: button letters are R Right, L Left, U Up, D Down, A,
 -- B, S Select; "-" means no buttons. Speeds print as speed byte:fraction
 -- in hex, then subpixels per frame in decimal: 01:30 (1.188). Positions
 -- print in px.
@@ -33,15 +35,15 @@ local CFG = {
   sections = {
     setup = true,         -- R1-R4    the ROM, the start state, the controller
     witnesses = true,     -- R5-R16   exact sequences for each part of the bound
-    gotchas = true,       -- R29-R37  shortcuts and readings that fail, shown
-    buttons = true,       -- R17      every combination of the 7 buttons
-    edge = true,          -- R18      the left screen edge, at every subpixel
-    jumps = true,         -- R19      every jump from the start lands cleanly
-    play = true,          -- R20-R24  random play, in lockstep with the model
-    backgrounds = true,   -- R38      sampled states over other RAM backgrounds
-    exhaustive = true,    -- R25-R28  every model state, every input case
+    gotchas = true,       -- R17-R25  shortcuts and readings that fail, shown
+    buttons = true,       -- R26      every combination of the 7 buttons
+    edge = true,          -- R27      the left screen edge, at every subpixel
+    jumps = true,         -- R28      every jump from the start lands cleanly
+    play = true,          -- R29-R33  random play, in lockstep with the model
+    backgrounds = true,   -- R34      sampled states over other RAM backgrounds
+    exhaustive = true,    -- R35-R38  every model state, every input case
   },
-  background_stride = 97, -- R38 checks every 97th state (about 670)
+  background_stride = 97, -- R34 checks every 97th state (about 670)
   exhaustive_stride = 1,  -- 1: every state; 50: a quick pass
   exhaustive_first = 1,   -- to resume a stopped run, start at this state
   exhaustive_last = nil,  -- nil: through the last state
@@ -96,13 +98,23 @@ function R.say(s)
   if R.out then R.out:write(s, "\n"); R.out:flush() end
 end
 
--- Announce a claim: its id, title, and lines saying what it tests, how,
--- and what it supports.
+-- How each claim shows its behavior (see the legend printed at the start).
+local KIND = { R1 = "setup", R2 = "setup", R3 = "setup", R4 = "setup",
+               R12 = "written", R15 = "search", R23 = "written",
+               R24 = "written", R25 = "written", R26 = "sampled",
+               R27 = "sweep", R28 = "sweep", R34 = "sampled" }
+for i = 5, 22 do KIND["R" .. i] = KIND["R" .. i] or "sequence" end
+for i = 29, 33 do KIND["R" .. i] = "sampled" end
+for i = 35, 38 do KIND["R" .. i] = "exhaustive" end
+
+-- Announce a claim: its id, kind, title, and lines saying what it tests,
+-- how, and what it supports.
 function R.claim(id, title, lines)
-  local c = { id = id, title = title, n = 0, bad = 0, shown = 0 }
+  local c = { id = id, title = title, kind = KIND[id] or "?", n = 0,
+              bad = 0, shown = 0 }
   R.list[#R.list + 1] = c
   R.say("")
-  R.say(id .. "  " .. title)
+  R.say(id .. "  " .. title .. "  [" .. c.kind .. "]")
   for _, line in ipairs(lines or {}) do R.say("      " .. line) end
   return c
 end
@@ -442,7 +454,8 @@ local function section_setup()
   end
 
   -- R2
-  c = R.claim("R2", "The ROM's speed tables are the ones the model uses", {
+  c = R.claim("R2", "The speed tables: caps 40/24/16, adders 228/152/208",
+      {
     "Tests: the program contains MaxLeftXSpdData D8 E8 F0, then",
     "MaxRightXSpdData 28 18 10 0C, then FrictionData E4 98 D0, as in",
     "SMBDIS.ASM. Read from the ROM file, and from the CPU's view at the",
@@ -868,11 +881,12 @@ local function section_witnesses()
   -- R15: the left-edge trap, found by search (the ROM's timing decides
   -- the exact frame counts).
   if not B then
-    R.skip("R15", "The left-edge trap", "bound file not loaded: "
+    R.skip("R15", "Moving left with the latch clear, Mario can latch at"
+        .. " the edge and beat 304", "bound file not loaded: "
         .. tostring(bound_err))
   else
-    c = R.claim("R15", "The left-edge trap: why the latch rule tests speed"
-        .. " >= 0", {
+    c = R.claim("R15", "Moving left with the latch clear, Mario can latch at"
+        .. " the edge and beat 304", {
       "Tests: walk left at the walking cap (latch clear), turn right for",
       "one frame near the edge: that state has latch clear, $0700 < 25",
       "and is moving left. Then run left into the edge (stale $0700 of",
@@ -930,7 +944,8 @@ local function section_witnesses()
     else R.done(c, "NOT SHOWN", "trap not reproduced on the searched lines") end
   end
 
-  c = R.claim("R16", "Other rules the model uses", {
+  c = R.claim("R16", "Down cancels Left/Right on the ground; facing holds"
+      .. " in the air; Left+Right walks from 11", {
     "Tests: Down cancels Left/Right on the ground (Right, then Down+Right",
     "slows: speed 00:98). Facing doesn't change in the air (a jump, then",
     "Left in the air leaves facing 1). Left+Right at 11 or more walks at",
@@ -953,7 +968,7 @@ local function section_witnesses()
   R.done(c)
 end
 
--- === R29-R37. Gotchas =======================================================
+-- === R17-R25. Gotchas =======================================================
 
 -- Each claim shows, on the ROM, a shortcut or reading of the code that looks
 -- right and isn't. "Rules out" names the wrong idea.
@@ -964,10 +979,12 @@ local function section_gotchas()
   local c, n
 
   if not B then
-    R.skip("R29", "The latch rule needs both free frames", "bound file not"
+    R.skip("R17", "The double charge starts from a state the latch rule"
+        .. " accepts", "bound file not"
         .. " loaded: " .. tostring(bound_err))
   else
-    c = R.claim("R29", "The latch rule needs both free frames", {
+    c = R.claim("R17", "The double charge starts from a state the latch rule"
+        .. " accepts", {
       "Tests: R11's double charge. After Left+Right, B, Right, the state",
       "passes qualifies_for_slower_ramp() (latch clear, $0700 below 25, not",
       "moving left). The next two frames, Left+Right+B and Right+B, each",
@@ -1008,7 +1025,7 @@ local function section_gotchas()
     R.done(c)
   end
 
-  c = R.claim("R30", "At speed byte 0, the fraction and moving direction 3"
+  c = R.claim("R18", "At speed byte 0, the fraction and moving direction 3"
       .. " stay", {
     "Tests: Left+Right, B, Right (speed 00:98, facing 1, moving 3), then 10",
     "frames with no buttons: speed 00:98 and moving direction 3 on every",
@@ -1026,7 +1043,7 @@ local function section_gotchas()
       cat({ "LR", "B", "R" }, rep("", 10), { "R" }), expect)
   R.done(c)
 
-  c = R.claim("R31", "Walking caps at 24, even with the latch set", {
+  c = R.claim("R19", "Walking caps at 24, even with the latch set", {
     "Tests: Right+B until the latch sets, then Right alone. While",
     "RunningTimer lasts Mario still runs; when it runs out, the cap drops",
     "to 24 and the speed byte snaps to 24 in one frame, with adder $00D0:",
@@ -1062,7 +1079,7 @@ local function section_gotchas()
   end)
   R.done(c)
 
-  c = R.claim("R32", "A jump keeps the latch of its last ground frame", {
+  c = R.claim("R20", "A jump keeps the latch of its last ground frame", {
     "Tests: Right+B from the start, then a jump (A+Right+B) on frame 33",
     "or 34. R7's latch sets on frame 33, from $0700 at that frame's start.",
     "A jump on frame 33 takes off at speed 28 or more with the latch clear,",
@@ -1095,12 +1112,12 @@ local function section_gotchas()
   end
   R.done(c)
 
-  c = R.claim("R33", "From 25 up, running forward adds 228, not 456", {
+  c = R.claim("R21", "From 25 up, running forward adds 228, not 456", {
     "Tests: Right+B from the start: every frame that starts at speed byte",
     "25 or more and ends below the cap adds exactly 228, adder $00E4.",
     "Facing equals the moving direction, so $E4 isn't doubled.",
     "Rules out: 456 every frame from 25 as the game's rate. The bound",
-    "allows it as an upper bound; 456 needs facing to differ (R10, R34).",
+    "allows it as an upper bound; 456 needs facing to differ (R10, R22).",
     "Supports: the tighter rule from 25 up in OPEN_CLAIMS.md.",
   })
   G.load()
@@ -1121,7 +1138,7 @@ local function section_gotchas()
   R.check(c, frames >= 10, function() return "too few frames from 25" end)
   R.done(c)
 
-  c = R.claim("R34", "A turnaround holds one 456 frame, at any speed", {
+  c = R.claim("R22", "A turnaround holds one 456 frame, at any speed", {
     "Tests: Right+B to speed bytes 12, 20 and 30, one frame of Left (facing",
     "turns left, the moving direction stays right), then Right+B twice:",
     "the first adds 456 ($E4 doubled: facing differs from the moving",
@@ -1153,7 +1170,7 @@ local function section_gotchas()
   end
   R.done(c)
 
-  -- Written states for R35-R37: on the ground at x 96, facing and moving
+  -- Written states for R23-R25: on the ground at x 96, facing and moving
   -- right, latch clear unless given, RunningTimer as given.
   local function one_frame(w, abs, latch, timer, keys)
     G.load()
@@ -1163,7 +1180,7 @@ local function section_gotchas()
     return G.read()
   end
 
-  c = R.claim("R35", "RunningTimer keeps Mario running only from 2 up", {
+  c = R.claim("R23", "RunningTimer keeps Mario running only from 2 up", {
     "Tests (states written into RAM): speed 10, facing and moving right,",
     "Right alone, with RunningTimer 2 and 1 before the frame. At 2 the",
     "running rules apply (adder $00E4, +228); at 1 the walking rules do",
@@ -1183,7 +1200,7 @@ local function section_gotchas()
   end
   R.done(c)
 
-  c = R.claim("R36", "Down hides Left/Right only from the acceleration", {
+  c = R.claim("R24", "Down hides Left/Right only from the acceleration", {
     "Tests (states written into RAM), on the ground facing and moving",
     "right. Down+Left at speed 5: the skid reset (ProcSkid) still sees",
     "Left and zeroes the speed, though the acceleration sees no direction.",
@@ -1206,7 +1223,7 @@ local function section_gotchas()
   end)
   R.done(c)
 
-  c = R.claim("R37", "$0700 of 33 or more picks $D0 without the latch", {
+  c = R.claim("R25", "$0700 of 33 or more picks $D0 without the latch", {
     "Tests (states written into RAM): on the ground, latch clear, facing",
     "and moving right, RunningTimer 0, Right alone, at speed 32 and 33.",
     "At 32 the walking adder is $0098; at 33 it is $00D0, as if the latch",
@@ -1227,12 +1244,13 @@ local function section_gotchas()
   R.done(c)
 end
 
--- === R17. Every button combination ==========================================
+-- === R26. Every button combination ==========================================
 
 local BITS = { "R", "L", "U", "D", "A", "B", "S" }
 
 local function section_buttons(states)
-  local c = R.claim("R17", "Only the inputs the model distinguishes matter", {
+  local c = R.claim("R26", "Buttons beyond the model's input cases don't"
+      .. " change horizontal physics", {
     "Tests: " .. CFG.button_states .. " random states, on the ground and in the"
         .. " air, with",
     "all 128 combinations of R, L, U, D, A, B and Select, at random",
@@ -1242,7 +1260,7 @@ local function section_buttons(states)
     "whether B is held or RunningTimer is 2 or more, and a new A press on",
     "the ground. So Up and Select act like B for the latch and the skid",
     "but don't run, and only Left/Right matter in the air.",
-    "Supports: the input cases R25-R28 use; the bound's input alphabet.",
+    "Supports: the input cases R35-R38 use; the bound's input alphabet.",
   })
   for _ = 1, CFG.button_states do
     local st = states[math.random(#states)]
@@ -1272,10 +1290,11 @@ local function section_buttons(states)
   R.done(c)
 end
 
--- === R18. The left edge, every subpixel =====================================
+-- === R27. The left edge, every subpixel =====================================
 
 local function section_edge()
-  local c = R.claim("R18", "The left edge clamp, at every subpixel", {
+  local c = R.claim("R27", "The left-edge clamp keeps the subpixel and lifts"
+      .. " Mario at most 15/16 px", {
     "Tests (states written into RAM): Mario on the left edge, at each",
     "subpixel 0-240 (step 16), each speed byte -40 to +15, each facing, on",
     "the ground and in the air, under -, R, L, LR, RB, LB, B. Each frame",
@@ -1327,10 +1346,10 @@ local function section_edge()
   R.done(c, nil, string.format("largest lift seen %s", T.px(most)))
 end
 
--- === R19. Jumps =============================================================
+-- === R28. Jumps =============================================================
 
 local function section_jumps()
-  local c = R.claim("R19", "Every jump from the start lands cleanly", {
+  local c = R.claim("R28", "Every jump from the start lands cleanly", {
     "Tests: from the start, $0700 set to 0, 10, 20, 26 or 30 (it picks the",
     "jump's strength), A held 1 to 45 frames. Each jump leaves the ground,",
     "lands at y 176 on the ground, and never triggers the side push",
@@ -1364,7 +1383,7 @@ local function section_jumps()
   R.done(c, nil, string.format("%d frames fell at y speed 5+", fast))
 end
 
--- === R20-R24. Real play =====================================================
+-- === R29-R33. Real play =====================================================
 
 local MENU = { "RB", "R", "LR", "LRB", "L", "LB", "B", "", "AR", "ARB", "ALR",
                "ALRB", "A", "DR", "D", "AL", "ALB", "U", "DLR", "S", "RS",
@@ -1417,7 +1436,7 @@ local function within(env, s, moved, k)
 end
 
 local function section_play()
-  local c_lock = R.claim("R20", "Real play matches the model, frame by frame", {
+  local c_lock = R.claim("R29", "Real play matches the model, frame by frame", {
     "Tests: " .. CFG.play_runs .. " runs of " .. CFG.play_frames
         .. " frames. Each starts with one of " .. #SETUPS .. " setups",
     "(the start, the RTA opening, a run to the latch, a double charge, a",
@@ -1429,16 +1448,17 @@ local function section_play()
     "game, which single written frames can't show.",
     "Supports: the model is right along real lines, not just one frame.",
   })
-  local c_set = R.claim("R21", "Every state reached is in the model's set", {
-    "Tests: after every frame of R20: SM.in_set() holds (fraction a",
+  local c_set = R.claim("R30", "Real play only reaches states the model"
+      .. " covers", {
+    "Tests: after every frame of R29: SM.in_set() holds (fraction a",
     "multiple of 4; $0700 = |speed byte| unless it's 0; moving direction",
     "= sign; at byte 0, $0700 below 16 unless moving left), and the",
     "subpixel is a multiple of 16.",
     "Supports: the model checks cover every state the game reaches.",
   })
-  local c_scope = R.claim("R22", "The screen and the scope stay as the bound"
-      .. " assumes", {
-    "Tests: after every frame of R20: Mario is never left of the screen's",
+  local c_scope = R.claim("R31", "In play the edge never passes Mario, and"
+      .. " nothing else pushes him", {
+    "Tests: after every frame of R29: Mario is never left of the screen's",
     "left edge; the edge never moves left; when it moves right, it moves",
     "no more than Mario did that frame and he ends 64 px or more clear of",
     "it; he stays short of the right-edge clamp (239 px); no wall or floor",
@@ -1450,8 +1470,8 @@ local function section_play()
   })
   local c_bound, c_burst
   if B then
-    c_bound = R.claim("R23", BOUND_NAME .. " holds in real play", {
-      "Tests: at every frame j of R20, the bound's own functions read the",
+    c_bound = R.claim("R32", BOUND_NAME .. " holds in real play", {
+      "Tests: at every frame j of R29, the bound's own functions read the",
       "game's RAM. For every later frame t within " .. CFG.K .. " frames:",
       "the speed byte at t is within the ramp's after t - j frames, and so",
       "is the distance moved; whenever Mario is at full speed at t, his",
@@ -1461,24 +1481,24 @@ local function section_play()
       "Supports: the bound itself, on the ROM, along real lines.",
     })
     if B.has_burst_check then
-      c_burst = R.claim("R24", BOUND_NAME .. " holds with its burst check", {
-        "Tests: as R23, with do_burst_check: one free frame where the speed",
+      c_burst = R.claim("R33", BOUND_NAME .. " holds with its burst check", {
+        "Tests: as R32, with do_burst_check: one free frame where the speed",
         "byte is nonzero, and the scores from bound_x_position(j, rule,",
         "true).",
         "Supports: the burst check (FREE_FRAMES_IF_MOVING), on the ROM.",
       })
     else
-      c_burst = R.claim("R24", "Candidate: the burst check", {
-        "Tests: as R23, with one free frame where the speed byte is nonzero",
+      c_burst = R.claim("R33", "Candidate: the burst check", {
+        "Tests: as R32, with one free frame where the speed byte is nonzero",
         "(bound2.lua's do_burst_check).",
         "Information only; not part of " .. BOUND_NAME .. ".",
       })
       c_burst.info = true
     end
   else
-    R.skip("R23", BOUND_NAME .. " holds in real play", "bound file not loaded: "
+    R.skip("R32", BOUND_NAME .. " holds in real play", "bound file not loaded: "
         .. tostring(bound_err))
-    R.skip("R24", "The burst check", "bound file not loaded")
+    R.skip("R33", "The burst check", "bound file not loaded")
   end
 
   local K, P = CFG.K, (B and B.SCORING_FRAME or 45)
@@ -1664,7 +1684,7 @@ end
 -- The input cases for one frame. On the ground: Left/Right; Down or not; the
 -- other-button and RunningTimer cases: nothing (timer 0 or 10), Select (a
 -- non-A button that isn't B), or B; A newly pressed or not. In the air:
--- Left/Right only (R17 checks the other buttons don't matter there).
+-- Left/Right only (R26 checks the other buttons don't matter there).
 local function input_cases()
   local LRS = { "", "R", "L", "LR" }
   local MIDS = {
@@ -1686,15 +1706,15 @@ local function input_cases()
   return ground_cases, air_cases
 end
 
--- === R38. The RAM the model ignores =========================================
+-- === R34. The RAM the model ignores =========================================
 
 local function section_backgrounds(states)
   local ground_cases, air_cases = input_cases()
   local stride = CFG.background_stride
   local n_states = floor((#states - 1) / stride) + 1
-  local c = R.claim("R38", "One frame doesn't depend on RAM the model"
+  local c = R.claim("R34", "One frame doesn't depend on RAM the model"
       .. " ignores", {
-    string.format("Tests: R25's comparison for every %dth state (%d), with",
+    string.format("Tests: R35's comparison for every %dth state (%d), with",
         stride, n_states),
     "all its input cases, written over three other backgrounds instead of",
     "the start: 37 and 113 frames of standing (other frame counter, timers",
@@ -1704,7 +1724,7 @@ local function section_backgrounds(states)
     "model.",
     "Rules out: hidden inputs (the frame counter, timers, random numbers,",
     "the screen position, the subpixel away from the edge).",
-    "Supports: R25-R28 use one background and subpixel 0.",
+    "Supports: R35-R38 use one background and subpixel 0.",
   })
   local bgs = {}
   for _, b in ipairs({ { "37 frames standing", rep("", 37) },
@@ -1745,7 +1765,7 @@ local function section_backgrounds(states)
   R.done(c)
 end
 
--- === R25-R28. Exhaustive one-frame comparison ===============================
+-- === R35-R38. Exhaustive one-frame comparison ===============================
 
 local function section_exhaustive(states)
   local ground_cases, air_cases = input_cases()
@@ -1764,12 +1784,12 @@ local function section_exhaustive(states)
     "LR; Down or not; no other button (RunningTimer 0 or 10), Select, or",
     "B; A newly pressed or not (" .. #ground_cases .. " cases). In the air",
     "(y 100, falling): Left/Right none, R, L, LR (" .. #air_cases
-        .. " cases; R17 checks the",
+        .. " cases; R26 checks the",
     "other buttons don't matter there). Each case at x 96 and on the left",
     "edge: " .. per_state .. " frames per state, " .. per_state * n_states
         .. " in all.",
   }
-  local c_state = R.claim("R25", "Every state and input case: the next state"
+  local c_state = R.claim("R35", "Every state and input case: the next state"
       .. " matches the model", {
     how[1], how[2], how[3], how[4], how[5], how[6], how[7], how[8],
     "Tests: the ROM's speed and fraction, facing, moving direction, $0700",
@@ -1777,25 +1797,27 @@ local function section_exhaustive(states)
     "Supports: the model checks (smb1_model_validation.lua) describe the",
     "ROM's one-frame behavior over the whole state set.",
   })
-  local c_add = R.claim("R26", "... and the acceleration applied matches", {
-    "Tests: on every frame of R25 where the model adds or subtracts, the",
+  local c_add = R.claim("R36", "Every state and input case: the adder matches"
+      .. " the model", {
+    "Tests: on every frame of R35 where the model adds or subtracts, the",
     "ROM's FrictionAdder equals the model's: 152, 208 or 228, doubled",
     "exactly when facing differs from the moving direction.",
     "Supports: 456 is the largest acceleration, and 304 and 416 are the",
     "doubled walking rates, as the bound assumes.",
   })
-  local c_move = R.claim("R27", "... and Mario moves by the speed byte only", {
-    "Tests: on every frame of R25, Mario's position changes by exactly 16",
+  local c_move = R.claim("R37", "Every state and input case: Mario moves by the"
+      .. " speed byte only", {
+    "Tests: on every frame of R35, Mario's position changes by exactly 16",
     "x the speed byte after acceleration (1/256 px units), whatever the",
     "fraction; on the edge, the clamp sets his pixel to the edge and keeps",
     "the subpixel, exactly when his move ends there or past it.",
     "Supports: the bound counts each frame's move as floor(speed) / 16.",
   })
-  local c_jump = R.claim("R28", "... and jumps start on the frame A is"
-      .. " pressed", {
-    "Tests: on every ground frame of R25, Mario leaves the ground exactly",
+  local c_jump = R.claim("R38", "Every state and input case: a jump starts"
+      .. " on the frame A is pressed", {
+    "Tests: on every ground frame of R35, Mario leaves the ground exactly",
     "when A is newly pressed, and that frame already uses the air rules",
-    "(R25 compares it with the model's air step); air frames stay in air.",
+    "(R35 compares it with the model's air step); air frames stay in air.",
     "Supports: the model's jump timing (ProcJumping before X_Physics).",
   })
   local claim_of = { state = c_state, adder = c_add, move = c_move,
@@ -1866,6 +1888,31 @@ for _, name in ipairs({ "setup", "witnesses", "gotchas", "buttons", "edge",
 end
 R.say("Sections: " .. table.concat(s, ", ") .. string.format("; exhaustive"
     .. " stride %d; seed %d", CFG.exhaustive_stride, CFG.seed))
+for _, line in ipairs({
+  "",
+  "How to read this log",
+  "  Each claim states a behavior of the ROM. Its block gives the claim's",
+  "  id, the behavior, and its kind in brackets; then what it tests, what",
+  "  wrong idea it rules out (some claims) and what it supports; then the",
+  "  evidence (inputs, and the values the game produced); then a verdict:",
+  "  -> id STATUS (checks, failed). Claims that share a loop (R29-R33,",
+  "  R35-R38) print their verdicts together after it.",
+  "  Kinds: how the behavior is shown.",
+  "    setup       the ROM, the start state and the controller",
+  "    sequence    exact inputs from the start of 1-1",
+  "    written     a state written into RAM, then exact inputs; it shows",
+  "                the rule, not that play reaches the state",
+  "    search      nearby input sequences, until one shows the behavior",
+  "    sweep       every case in the stated range",
+  "    sampled     random or every-Nth cases: no exception found, not",
+  "                proof that none exists",
+  "    exhaustive  every state in the model's set, every input case",
+  "  Statuses: PASS shown; FAIL contradicted (mismatches print in full);",
+  "  NOT RUN skipped or no checks; NOT SHOWN a search found no case (not",
+  "  a failure); claims marked information only don't count as failures.",
+  "  The summary at the end lists every claim: with all PASS, it is the",
+  "  list of behaviors this ROM was shown to have, each with its kind.",
+}) do R.say(line) end
 
 local ok, why = G.reach_start()
 if not ok then
@@ -1884,10 +1931,13 @@ if CFG.sections.backgrounds then section_backgrounds(states) end
 if CFG.sections.exhaustive then section_exhaustive(states) end
 
 R.say("")
-R.say("Summary")
+R.say("Summary: behaviors of the ROM, each with how it was shown")
+R.say(string.format("  %-4s %-10s %-11s %s", "id", "status", "kind",
+    "behavior"))
 local all = true
 for _, c in ipairs(R.list) do
-  R.say(string.format("  %-4s %-10s %s", c.id, c.status or "?", c.title))
+  R.say(string.format("  %-4s %-10s %-11s %s%s", c.id, c.status or "?",
+      c.kind, c.title, c.info and " (information only)" or ""))
   if c.status == "FAIL" and not c.info then all = false end
 end
 R.say(all and "NO CLAIM FAILED (NOT RUN and NOT SHOWN are not failures;"
