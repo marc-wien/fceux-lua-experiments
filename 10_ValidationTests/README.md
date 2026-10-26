@@ -192,7 +192,7 @@ steps:
 
 ## Results
 
-**Model check, 2026-10-26: all claims hold,** for `bound2.lua` and for
+**Model check, 2026-10-25: all claims hold,** for `bound2.lua` and for
 `bound1.lua`.
 - **Closest margins:** 0 for speed, distance and score (speed-only bound);
   1.1875 px for the latch rule's score. The same with the burst check.
@@ -224,4 +224,4 @@ Each fault failed the claims that test the behavior it changed. R1 fails in
 every stand-in run, because the stand-in has no real ROM; the clean runs,
 one per bound file, passed every other claim.
 
-Open and untested claims are listed in `OPEN_CLAIMS.md`.
+Open and untested claims are listed in `OPEN_CLAIMS.md`.
