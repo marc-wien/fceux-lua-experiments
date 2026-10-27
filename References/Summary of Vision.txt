@@ -1,0 +1,11 @@
+I am working on a project to apply "branch and bound" techniques to Super Mario Bros. (NES, NTSC) to see if certain things (e.g. "fast accel" tech, certain sequences) are *provably* optimal. An underlying goal is to experiment with and engineer clever search pruning techniques to make the expontential growth tractable, and provide digestible examples for the community to hopefully appreciate and potentially adapt and apply to advance the art. I am also using FCEUX + Lua for ROM soundness, accessibility, allowing visualization, and trying to rely on pruning rather than compiled-language speed for tractability
+
+My initial plan was to take a "macro-based" approach based on domain knowledge of game input sequences (as opposed to per-frame -- e.g. multi-frame, parameterized macros that consider how jumping is typically input end-to-end, + extra variations), but working with Claude showed me that exhaustive search with a tight-ish but sound heuristic bound, a savestate based tree search, and *critically* full RAM deduplication logic.
+
+Reading my entire GitHub should provide an up-to-date snapshot. My goals are to build up community-friendly demos that start minimal then add features incrementally in the 03 folder. bound2 in the 02 folder is the latest bound that balances tightness, safety, and interpretability/readability.
+
+My current phasing thought for what's next is: write up an explainer of bound2, explore depth-first tractability with bound2, go back and do this again for 8-4 start and maybe arbitrary start location and handle death, build up a "hybrid" approach (with onscreen diagnostics) of maybe a) breadth first with RAM dedup until approaching untenability of frontier, b) greedy expansions of resulting frontier for incumbents, c) best-first search with pruning (this takes advantage of known "fast accel" requiring early frame inputs that take an initial loss, and also the non-tightness of the heuristic)
+
+My initial thread is here (@marcofarfisa): https://www.speedrun.com/smb1/forums/lxh6c
+
+My working GitHub is here (@marc-wien): https://github.com/marc-wien/fceux-lua-experiments
