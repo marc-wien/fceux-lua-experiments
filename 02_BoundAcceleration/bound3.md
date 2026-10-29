@@ -1,21 +1,22 @@
-# bound3: the best Mario could possibly do
+# Defining an upper bound on the fastest Mario could possibly go
 
-`bound3.lua` answers one question about any moment in a search: **what is the best score any
+`bound3.lua` answers one question about any moment in a TAS search: **what is the best score any
 continuation from here could reach?** A score is Mario's x on the frame he first reaches max speed,
-carried forward at max speed to frame 45. If even this best case can't beat the best line found so
-far, nothing from here can.
+carried forward at max speed to a specific future frame. If even this best case can't beat the best
+complete sequence found so far, no possible sequence from the current state can.
 
-It bounds every frame, not just the score: after any number of frames, no line from here has more
-speed or has moved farther than bound3's ramp. Every part of the ramp is there for that, each
-justified by a game mechanism below, so the bound also holds for any other objective built on speed
-or distance, such as x at a fixed frame.
+This function provides an upper bound on every subsequent frame, not just the score: after any
+number of frames, no sequence from the current state can have more speed or have moved farther than
+bound3's ramp. Every ramp rule exists to support that strict framewise bounding, and each one
+accounts for specific physics mechanisms identified in the game's source code.
 
 Routine and RAM names below are those of the SMB1 disassembly (SMBDIS.ASM).
 
 ## Units and RAM
 
-Speeds are in the game's units: 1/16 px per frame, so max speed 40 is 2.5 px a frame. Rates are in
-1/256 of a speed unit per frame, so a rate of 456 adds about 1.8 a frame.
+Speeds are in the game's units of 1/16 px per frame, so max speed 40 is 2.5 px a frame.
+Acceleration (speed "gains" per frame) are in 1/256 of a speed unit per frame, so a gain of 456
+adds about 1.8 units of speed in one frame.
 
 | RAM | Name | Used for |
 |---|---|---|
