@@ -5,9 +5,7 @@ is the best score any continuation from here could reach?** A score is Mario's x
 frame he first reaches max speed, carried forward at max speed to some fixed future frame (45
 here).
 
-| **If even this best case can't beat the best complete sequence found so far, no possible input 
-sequence from the current state can.** |
-|---|
+**If even this best case can't beat the best complete sequence found so far, no possible input sequence from the current state can.**
 
 `bound_x_position()` establishes an upper bound for every subsequent frame, not just the score:
 after any number of frames, no sequence from the current state can have a higher speed byte or have
