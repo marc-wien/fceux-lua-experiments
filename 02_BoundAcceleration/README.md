@@ -11,8 +11,7 @@ here).
 `bound_x_position()` establishes an upper bound for every subsequent frame, not just the score:
 after any number of frames, no sequence from the current state can have a higher speed byte or have
 moved farther than bound3's ramp. Every ramp rule exists to support that strict framewise bounding,
-and each piece of logic
-accounts for specific physics mechanisms identified in the game's code.
+and all logic is derived from specific physics mechanisms identified in the game's disassembly.
 
 Routine and RAM names below are those of the SMB1 disassembly (SMBDIS.ASM).
 
@@ -38,7 +37,7 @@ frame. Accelerations (speed gained per frame) are in 1/256 of a speed unit, so a
 From Mario's current speed, bound3 plays out the fastest ramp the game could ever allow, then holds
 max speed:
 
-1. A negative speed counts as 0.
+1. A negative speed is treated as 0.
 2. The first 2 frames gain 456 each, at any speed (the "free frames").
 3. After that, below speed 25 it gains 416 a frame; from 25 up, 456 a frame.
 4. Each frame moves Mario speed ÷ 16 px, counting whole speed units only. The first frame moves at
