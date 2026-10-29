@@ -1,15 +1,16 @@
 # Defining an upper bound on how fast Mario can possibly accelerate
 
-`bound3.lua` answers one question about a given game state within an input-sequence search: **what is the best score any
-continuation from here could reach?** A score is Mario's x-position on the frame he first reaches max speed,
-carried forward at max speed to a fixed future frame (frame 45 here). If even this best case can't beat
-the best complete sequence found so far, no possible input sequence from the current state can.
+`bound3.lua` answers one question about a given game state within an input-sequence search: **what
+is the best score any continuation from here could reach?** A score is Mario's x-position on the
+frame he first reaches max speed, carried forward at max speed to a fixed future frame (frame 45
+here). If even this best case can't beat the best complete sequence found so far, no possible input
+sequence from the current state can.
 
-`bound_x_position()` establishes an upper bound for every subsequent frame, not just the score: after any number of frames,
-no sequence from the current state can have a higher speed byte or have moved farther than bound3's
-ramp. Every ramp rule exists to support that strict framewise bounding, so the bound will hold for
-any objective built on speed or distance. Each piece of logic accounts for
-specific physics mechanisms identified in the game's code.
+`bound_x_position()` establishes an upper bound for every subsequent frame, not just the score:
+after any number of frames, no sequence from the current state can have a higher speed byte or have
+moved farther than bound3's ramp. Every ramp rule exists to support that strict framewise bounding,
+so the bound will hold for any objective that rewards more speed or distance. Each piece of logic
+accounts for specific physics mechanisms identified in the game's code.
 
 Routine and RAM names below are those of the SMB1 disassembly (SMBDIS.ASM).
 
