@@ -1,0 +1,245 @@
+SMB1 acceleration bound: exhaustive check against the model
+Files tested (Adler-32 of each file's text, line endings ignored):
+  e7b8da3b  C:\Users\Marc\fceux-2.6.6-win64\fceux-lua-experiments\10_ValidationTests\smb1_model_validation.lua
+  db130524  C:\Users\Marc\fceux-2.6.6-win64\fceux-lua-experiments\10_ValidationTests\smbmodel.lua
+  ad97a4b1  C:\Users\Marc\fceux-2.6.6-win64\fceux-lua-experiments\10_ValidationTests\bound_harness.lua
+  60a272f4  C:\Users\Marc\fceux-2.6.6-win64\fceux-lua-experiments\10_ValidationTests\../02_BoundAcceleration/bound3.lua
+  0019e83b  C:\Users\Marc\fceux-2.6.6-win64\fceux-lua-experiments\10_ValidationTests\../02_BoundAcceleration/bound2.lua
+Horizon: every k = 1..60 frames from every state
+
+M1  bound3.lua loads, and this check's copy of its ramp matches it
+      Loads the bound file's own text and runs it. Then, at every starting
+      speed from -40 to +41 in steps of 1/256, for both walking rates, and
+      with and without each option the bound has (the burst check; the facing
+      rule, facing the motion or away from it; clear of the left edge), checks
+      that the envelope used below (speed and distance after each frame)
+      projects exactly as the bound's ramp_to_max_speed does.
+      -> M1 PASS (497688 checks, 0 failed)  constants: run 456.0000, walk 416.0000 / 304.0000 below 25, cap 40, free frames 2 (1 with the burst check, $57 nonzero), edge 0.9375 px, projected to frame 45; facing rule: forward 228.0000, turn -152.0000, floor 26.7813
+
+M2  The model's state set is closed
+      64896 states (each on the ground or in the air). From each,
+      every input (Left/Right 0-3, Down, another non-A button, B-or-timer,
+      jump, edge clamp) gives a next state that is also in the set.
+
+M3  No frame adds more than 456 to max(speed, 0)
+      For every transition: the speed at the end of the frame, and the speed
+      that moved Mario, are at most 456 above max(start speed, 0), in the
+      model's units (1/256 subpixel per frame). 456 is $E4 doubled, the
+      largest adder.
+
+M4  The speed byte never leaves -40..+40
+      For every transition, the speed byte at the end of the frame and the
+      one that moved Mario stay within the caps ($28).
+
+M5  Speed 25 is reached from below only on the ground, running
+      For every transition from a speed byte of 24 or less to 25 or more:
+      it is a ground frame using the running rules. In the air below 25,
+      Mario is held to the walking cap of 24.
+      -> M2 PASS (8177766 checks, 0 failed)  1095089 distinct transitions
+      -> M3 PASS (8177766 checks, 0 failed)
+      -> M4 PASS (8177766 checks, 0 failed)
+      -> M5 PASS (1140 checks, 0 failed)
+
+M6  bound3's bound_x_position equals the envelope's projection
+      At every state, the bound's own bound_x_position (read from fake RAM),
+      less cruising at full speed, equals the envelope's offset: for both
+      rates, and with and without each option the bound has. With the facing
+      rule, the bound's own RAM tests (already_turned, holds_no_burst) must
+      also agree with the harness's. Mario is put on the left edge and 100 px
+      clear of it, so the edge position option is checked both ways: no
+      change on the edge, no edge push clear of it.
+      -> M6 PASS (2141568 checks, 0 failed)
+
+M7  bound3 holds frame by frame, from every state
+      For every state and every k up to the horizon, no line of k frames
+      ends with a higher speed byte than the ramp's after k frames (speed),
+      or moves farther than the ramp does in k frames (distance).
+      Speed only: 416 below 25. Latch rule: 304 below 25, at the states
+      where qualifies_for_slower_ramp() is true (37248 of 129792).
+      With the burst check: one free frame where $57 is nonzero.
+      With the facing rule: from 25 up, 228 a frame or a turnaround, and no free frames
+      for a state moving and facing its motion (see bound3.lua).
+      With edge position, for Mario clear of the left edge: no 15/16 px allowance,
+      and distance counts his moves alone (R41 shows the edge can't add to them).
+      A closest margin of 0 means some line reaches the bound exactly.
+    speed only (416 below 25)
+      speed: holds; closest 0.0000 speed bytes below the bound, at speed F6:00 (-10.000), facing 1, moving 2, $0700 10, latch clear, on the ground, 1 frames on: line 1.0000, bound 1.0000
+      dist: holds; closest 0.0000 px below the bound, at speed D8:00 (-40.000), facing 1, moving 2, $0700 40, latch clear, in the air, 1 frames on: line 0.9375, bound 0.9375
+    latch rule (304 where it applies)
+      speed: holds; closest 0.0000 speed bytes below the bound, at speed 00:00 (0.000), facing 1, moving 0, $0700 0, latch clear, in the air, 1 frames on: line 1.0000, bound 1.0000
+      dist: holds; closest 0.0000 px below the bound, at speed 00:00 (0.000), facing 1, moving 0, $0700 0, latch clear, in the air, 1 frames on: line 0.9375, bound 0.9375
+    speed only (416 below 25), with the burst check
+      speed: holds; closest 0.0000 speed bytes below the bound, at speed F6:00 (-10.000), facing 1, moving 2, $0700 10, latch clear, on the ground, 1 frames on: line 1.0000, bound 1.0000
+      dist: holds; closest 0.0000 px below the bound, at speed D8:00 (-40.000), facing 1, moving 2, $0700 40, latch clear, in the air, 1 frames on: line 0.9375, bound 0.9375
+    latch rule (304 where it applies), with the burst check
+      speed: holds; closest 0.0000 speed bytes below the bound, at speed 00:00 (0.000), facing 1, moving 0, $0700 0, latch clear, in the air, 1 frames on: line 1.0000, bound 1.0000
+      dist: holds; closest 0.0000 px below the bound, at speed 00:00 (0.000), facing 1, moving 0, $0700 0, latch clear, in the air, 1 frames on: line 0.9375, bound 0.9375
+    speed only (416 below 25), with the facing rule
+      speed: holds; closest 0.0000 speed bytes below the bound, at speed F6:00 (-10.000), facing 1, moving 2, $0700 10, latch clear, on the ground, 1 frames on: line 1.0000, bound 1.0000
+      dist: holds; closest 0.0000 px below the bound, at speed D8:00 (-40.000), facing 1, moving 2, $0700 40, latch clear, in the air, 1 frames on: line 0.9375, bound 0.9375
+    latch rule (304 where it applies), with the facing rule
+      speed: holds; closest 0.0000 speed bytes below the bound, at speed 00:00 (0.000), facing 1, moving 0, $0700 0, latch clear, in the air, 1 frames on: line 1.0000, bound 1.0000
+      dist: holds; closest 0.0000 px below the bound, at speed 00:00 (0.000), facing 1, moving 0, $0700 0, latch clear, in the air, 1 frames on: line 0.9375, bound 0.9375
+    speed only (416 below 25), with the burst check, with the facing rule
+      speed: holds; closest 0.0000 speed bytes below the bound, at speed F6:00 (-10.000), facing 1, moving 2, $0700 10, latch clear, on the ground, 1 frames on: line 1.0000, bound 1.0000
+      dist: holds; closest 0.0000 px below the bound, at speed D8:00 (-40.000), facing 1, moving 2, $0700 40, latch clear, in the air, 1 frames on: line 0.9375, bound 0.9375
+    latch rule (304 where it applies), with the burst check, with the facing rule
+      speed: holds; closest 0.0000 speed bytes below the bound, at speed 00:00 (0.000), facing 1, moving 0, $0700 0, latch clear, in the air, 1 frames on: line 1.0000, bound 1.0000
+      dist: holds; closest 0.0000 px below the bound, at speed 00:00 (0.000), facing 1, moving 0, $0700 0, latch clear, in the air, 1 frames on: line 0.9375, bound 0.9375
+    speed only (416 below 25), with edge position (clear of the edge)
+      speed: holds; closest 0.0000 speed bytes below the bound, at speed F6:00 (-10.000), facing 1, moving 2, $0700 10, latch clear, on the ground, 1 frames on: line 1.0000, bound 1.0000
+      dist: holds; closest 0.0000 px below the bound, at speed F6:00 (-10.000), facing 1, moving 2, $0700 10, latch clear, on the ground, 1 frames on: line 0.0625, bound 0.0625
+    latch rule (304 where it applies), with edge position (clear of the edge)
+      speed: holds; closest 0.0000 speed bytes below the bound, at speed 00:00 (0.000), facing 1, moving 0, $0700 0, latch clear, in the air, 1 frames on: line 1.0000, bound 1.0000
+      dist: holds; closest 0.0000 px below the bound, at speed 00:00 (0.000), facing 1, moving 0, $0700 0, latch clear, in the air, 1 frames on: line 0.0625, bound 0.0625
+    speed only (416 below 25), with the burst check, with edge position (clear of the edge)
+      speed: holds; closest 0.0000 speed bytes below the bound, at speed F6:00 (-10.000), facing 1, moving 2, $0700 10, latch clear, on the ground, 1 frames on: line 1.0000, bound 1.0000
+      dist: holds; closest 0.0000 px below the bound, at speed F6:00 (-10.000), facing 1, moving 2, $0700 10, latch clear, on the ground, 1 frames on: line 0.0625, bound 0.0625
+    latch rule (304 where it applies), with the burst check, with edge position (clear of the edge)
+      speed: holds; closest 0.0000 speed bytes below the bound, at speed 00:00 (0.000), facing 1, moving 0, $0700 0, latch clear, in the air, 1 frames on: line 1.0000, bound 1.0000
+      dist: holds; closest 0.0000 px below the bound, at speed 00:00 (0.000), facing 1, moving 0, $0700 0, latch clear, in the air, 1 frames on: line 0.0625, bound 0.0625
+    speed only (416 below 25), with the facing rule, with edge position (clear of the edge)
+      speed: holds; closest 0.0000 speed bytes below the bound, at speed F6:00 (-10.000), facing 1, moving 2, $0700 10, latch clear, on the ground, 1 frames on: line 1.0000, bound 1.0000
+      dist: holds; closest 0.0000 px below the bound, at speed F6:00 (-10.000), facing 1, moving 2, $0700 10, latch clear, on the ground, 1 frames on: line 0.0625, bound 0.0625
+    latch rule (304 where it applies), with the facing rule, with edge position (clear of the edge)
+      speed: holds; closest 0.0000 speed bytes below the bound, at speed 00:00 (0.000), facing 1, moving 0, $0700 0, latch clear, in the air, 1 frames on: line 1.0000, bound 1.0000
+      dist: holds; closest 0.0000 px below the bound, at speed 00:00 (0.000), facing 1, moving 0, $0700 0, latch clear, in the air, 1 frames on: line 0.0625, bound 0.0625
+    speed only (416 below 25), with the burst check, with the facing rule, with edge position (clear of the edge)
+      speed: holds; closest 0.0000 speed bytes below the bound, at speed F6:00 (-10.000), facing 1, moving 2, $0700 10, latch clear, on the ground, 1 frames on: line 1.0000, bound 1.0000
+      dist: holds; closest 0.0000 px below the bound, at speed F6:00 (-10.000), facing 1, moving 2, $0700 10, latch clear, on the ground, 1 frames on: line 0.0625, bound 0.0625
+    latch rule (304 where it applies), with the burst check, with the facing rule, with edge position (clear of the edge)
+      speed: holds; closest 0.0000 speed bytes below the bound, at speed 00:00 (0.000), facing 1, moving 0, $0700 0, latch clear, in the air, 1 frames on: line 1.0000, bound 1.0000
+      dist: holds; closest 0.0000 px below the bound, at speed 00:00 (0.000), facing 1, moving 0, $0700 0, latch clear, in the air, 1 frames on: line 0.0625, bound 0.0625
+      -> M7 PASS (32 checks, 0 failed)
+
+M8  bound3 holds for projected scores
+      For every state: no line that reaches full speed within the horizon
+      scores more than the bound's bound_x_position allows. A line's score is
+      its position projected to SCORING_FRAME at full speed; the check
+      compares how far each line gets beyond cruising at full speed.
+    speed only (416 below 25)
+      score: holds; closest 0.0000 px below the bound, at speed 19:00 (25.000), facing 2, moving 1, $0700 25, latch clear, in the air: line -3.7500, bound -3.7500
+    latch rule (304 where it applies)
+      score: holds; closest 1.1875 px below the bound, at speed 18:40 (24.250), facing 2, moving 1, $0700 24, latch clear, on the ground: line -5.3125, bound -4.1250
+    speed only (416 below 25), with the burst check
+      score: holds; closest 0.0000 px below the bound, at speed 19:00 (25.000), facing 2, moving 1, $0700 25, latch clear, in the air: line -3.7500, bound -3.7500
+    latch rule (304 where it applies), with the burst check
+      score: holds; closest 1.1875 px below the bound, at speed 13:A0 (19.625), facing 2, moving 1, $0700 19, latch clear, on the ground: line -9.6250, bound -8.4375
+    speed only (416 below 25), with the facing rule
+      score: holds; closest 0.0000 px below the bound, at speed 19:00 (25.000), facing 2, moving 1, $0700 25, latch clear, in the air: line -3.7500, bound -3.7500
+    latch rule (304 where it applies), with the facing rule
+      score: holds; closest 0.0625 px below the bound, at speed 16:68 (22.406), facing 1, moving 1, $0700 22, latch clear, on the ground: line -7.5000, bound -7.4375
+    speed only (416 below 25), with the burst check, with the facing rule
+      score: holds; closest 0.0000 px below the bound, at speed 19:00 (25.000), facing 2, moving 1, $0700 25, latch clear, in the air: line -3.7500, bound -3.7500
+    latch rule (304 where it applies), with the burst check, with the facing rule
+      score: holds; closest 0.0625 px below the bound, at speed 14:A0 (20.625), facing 2, moving 1, $0700 20, latch clear, on the ground: line -8.6250, bound -8.5625
+    speed only (416 below 25), with edge position (clear of the edge)
+      score: holds; closest 0.0000 px below the bound, at speed 19:00 (25.000), facing 2, moving 1, $0700 25, latch clear, in the air: line -3.7500, bound -3.7500
+    latch rule (304 where it applies), with edge position (clear of the edge)
+      score: holds; closest 1.1875 px below the bound, at speed 18:40 (24.250), facing 2, moving 1, $0700 24, latch clear, on the ground: line -5.3125, bound -4.1250
+    speed only (416 below 25), with the burst check, with edge position (clear of the edge)
+      score: holds; closest 0.0000 px below the bound, at speed 19:00 (25.000), facing 2, moving 1, $0700 25, latch clear, in the air: line -3.7500, bound -3.7500
+    latch rule (304 where it applies), with the burst check, with edge position (clear of the edge)
+      score: holds; closest 1.1875 px below the bound, at speed 13:A0 (19.625), facing 2, moving 1, $0700 19, latch clear, on the ground: line -9.6250, bound -8.4375
+    speed only (416 below 25), with the facing rule, with edge position (clear of the edge)
+      score: holds; closest 0.0000 px below the bound, at speed 19:00 (25.000), facing 2, moving 1, $0700 25, latch clear, in the air: line -3.7500, bound -3.7500
+    latch rule (304 where it applies), with the facing rule, with edge position (clear of the edge)
+      score: holds; closest 0.0625 px below the bound, at speed 16:68 (22.406), facing 1, moving 1, $0700 22, latch clear, on the ground: line -7.5000, bound -7.4375
+    speed only (416 below 25), with the burst check, with the facing rule, with edge position (clear of the edge)
+      score: holds; closest 0.0000 px below the bound, at speed 19:00 (25.000), facing 2, moving 1, $0700 25, latch clear, in the air: line -3.7500, bound -3.7500
+    latch rule (304 where it applies), with the burst check, with the facing rule, with edge position (clear of the edge)
+      score: holds; closest 0.0625 px below the bound, at speed 14:A0 (20.625), facing 2, moving 1, $0700 20, latch clear, on the ground: line -8.6250, bound -8.5625
+      -> M8 PASS (16 checks, 0 failed)
+
+M9  Each part of bound3 is needed
+      Each variant removes or loosens one part. A part is needed if some
+      state beats the variant: frame by frame (speed or distance after k
+      frames, the bound's per-frame claim) or by projected score (what
+      pruning uses). Both are shown, with each variant's ceiling at the
+      1-1 start (x 40, speed 0, frame 0) for comparison. bound3's:
+      speed only 123.9375, latch rule 115.6875; with the facing rule 122.8750 and 114.6250
+      with edge position too 122.0000 and 113.7500.
+      (With or without a burst check: $57 is 0 at the start.)
+    no free frames
+      frame by frame: needed (speed 60120, distance 90368 pairs beaten); scores: not needed (0 states); ceiling at the start 123.5000
+      e.g. speed 00:38 (0.219), facing 1, moving 2, $0700 25, latch clear, in the air, 1 frames on: line 2.0000, bound 1.0000
+    one free frame
+      frame by frame: needed (speed 5440, distance 7072 pairs beaten); scores: not needed (0 states); ceiling at the start 123.6875
+      e.g. speed 00:70 (0.438), facing 1, moving 3, $0700 0, latch clear, on the ground, 2 frames on: line 4.0000, bound 3.0000
+    304 below 25 at every state (no latch test)
+      frame by frame: needed (speed 1471987, distance 3462927 pairs beaten); scores: needed (64674 states); ceiling at the start 115.6875
+      e.g. speed D8:00 (-40.000), facing 1, moving 2, $0700 40, latch clear, in the air: line -31.8125, bound -36.8125
+    latch rule without the speed >= 0 test
+      frame by frame: needed (speed 1744, distance 0 pairs beaten); scores: not needed (0 states); ceiling at the start 115.6875
+      e.g. speed E8:50 (-23.688), facing 1, moving 2, $0700 24, latch clear, on the ground, 16 frames on: line 21.0000, bound 20.0000
+    ramp from the raw speed, not max(speed, 0)
+      frame by frame: needed (speed 997363, distance 1633109 pairs beaten); scores: needed (27001 states); ceiling at the start 123.9375
+      e.g. speed D8:00 (-40.000), facing 1, moving 2, $0700 40, latch clear, in the air: line -31.8125, bound -117.3750
+    no edge push on the first move
+      frame by frame: needed (speed 0, distance 1105337 pairs beaten); scores: not needed (0 states); ceiling at the start 123.0625
+      e.g. speed D8:00 (-40.000), facing 1, moving 2, $0700 40, latch clear, in the air, 1 frames on: line 0.9375, bound 0.0625
+    burst check with no free frames when $57 is nonzero
+      frame by frame: needed (speed 10028, distance 11594 pairs beaten); scores: not needed (0 states); ceiling at the start 123.9375
+      e.g. speed 01:38 (1.219), facing 2, moving 1, $0700 1, latch clear, on the ground, 1 frames on: line 3.0000, bound 2.0000
+    burst check, latch rule without the speed >= 0 test
+      frame by frame: needed (speed 3344, distance 396 pairs beaten); scores: needed (12 states); ceiling at the start 115.6875
+      e.g. speed E8:78 (-23.531), facing 1, moving 2, $0700 24, latch clear, on the ground: line -37.6875, bound -37.8125
+    facing rule without the floor (BEST_CROSSING)
+      frame by frame: needed (speed 8573, distance 264 pairs beaten); scores: not needed (0 states); ceiling at the start 122.8750
+      e.g. speed 17:68 (23.406), facing 1, moving 1, $0700 23, latch set, on the ground, 2 frames on: line 26.0000, bound 25.0000
+    facing rule without the turned branch
+      frame by frame: needed (speed 829045, distance 2273323 pairs beaten); scores: needed (59666 states); ceiling at the start 120.3750
+      e.g. speed D8:00 (-40.000), facing 1, moving 2, $0700 40, latch clear, in the air: line -31.8125, bound -32.1250
+    facing rule without the already-turned case
+      frame by frame: needed (speed 22344, distance 312640 pairs beaten); scores: needed (5400 states); ceiling at the start 122.8750
+      e.g. speed 19:00 (25.000), facing 2, moving 1, $0700 25, latch clear, in the air: line -3.7500, bound -4.6250
+      -> M9 PASS (11 checks, 0 failed)
+
+M10  Candidates (information only, not part of bound3)
+      Possible changes, checked like M7 and M8:
+        one free frame wherever the latch rule applies (R17 shows a line it
+        misses frame by frame);
+        a score-only bound without the parts M9 finds unneeded for scores.
+      A candidate that holds only by score would still be sound for
+      pruning, but not frame by frame.
+    latch rule with one free frame
+      frame by frame: beaten (68992 pairs); scores: holds (closest 0.5625 px); ceiling at the start 114.6875
+      e.g. speed 00:00 (0.000), facing 1, moving 3, $0700 0, latch clear, on the ground, 2 frames on: line 3.0000, bound 2.0000
+    no free frames and no edge push, speed only
+      frame by frame: beaten (1329413 pairs); scores: beaten (64 states); ceiling at the start 122.6250
+      e.g. speed 00:18 (0.094), facing 3, moving 2, $0700 25, latch set, in the air: line -29.7500, bound -29.8125
+    no free frames, no edge push, latch rule without the speed >= 0 test
+      frame by frame: beaten (1869561 pairs); scores: beaten (18092 states); ceiling at the start 112.4375
+      e.g. speed E8:00 (-24.000), facing 1, moving 2, $0700 24, latch clear, on the ground: line -38.9375, bound -40.0625
+      -> M10 INFO (3 checks, 0 failed)
+
+M11  Reference: the farthest the model allows from the 1-1 start
+      From the start state (speed 0, facing right, moving direction 0, on
+      the ground), the farthest any line gets. The model allows more than the
+      game, so no real line from the start can do better, if the model is
+      faithful and the line stays in scope.
+      45 frames: 71.8125 px (x 111.8125 at frame 45)
+      50 frames: 84.3125 px
+      -> M11 INFO (1 checks, 0 failed)
+
+M12  bound3 with its new options off equals bound2
+      At every state, on the left edge and 100 px clear of it, for both rates
+      and with and without the burst check: bound_x_position with the facing
+      rule and edge position off (and left out) equals bound2.lua's. So every
+      claim about bound2.lua, here and in the ROM suite, holds for it too.
+      -> M12 PASS (519168 checks, 0 failed)
+
+Summary
+  M1   PASS     bound3.lua loads, and this check's copy of its ramp matches it
+  M2   PASS     The model's state set is closed
+  M3   PASS     No frame adds more than 456 to max(speed, 0)
+  M4   PASS     The speed byte never leaves -40..+40
+  M5   PASS     Speed 25 is reached from below only on the ground, running
+  M6   PASS     bound3's bound_x_position equals the envelope's projection
+  M7   PASS     bound3 holds frame by frame, from every state
+  M8   PASS     bound3 holds for projected scores
+  M9   PASS     Each part of bound3 is needed
+  M10  INFO     Candidates (information only, not part of bound3)
+  M11  INFO     Reference: the farthest the model allows from the 1-1 start
+  M12  PASS     bound3 with its new options off equals bound2
+ALL CLAIMS HOLD (M10 and M11 are information only)
