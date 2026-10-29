@@ -1,7 +1,9 @@
 # Defining an upper bound on how fast Mario can possibly accelerate
 
-`bound3.lua` answers one question about a given game state within an input-sequence search: **what
-is the best score any continuation from here could reach?** A score is Mario's x-position on the
+`bound3.lua` answers the following question about a given state within an input-sequence search: **what
+is a upper bound on the best score any continuation from here could reach?**
+
+A score is Mario's x-position on the
 frame he first reaches max speed, carried forward at max speed to some fixed future frame (45
 here).
 
