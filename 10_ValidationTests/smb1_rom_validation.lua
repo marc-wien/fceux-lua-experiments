@@ -1582,13 +1582,12 @@ local function section_play()
   -- R41-R42: bound3.lua's edge position and facing rule, along the same runs.
   local c_edge = R.claim("R41", "In play the left edge never carries Mario"
       .. " past where his own moves could", {
-    "Tests: at every frame t of R29, from every earlier frame j within " .. CFG.K .. " frames:",
-    "Mario's x at t is at most the larger of his x at j and the left edge",
-    "at j plus 15/16 px, plus the moves his speed byte made from j to t",
-    "(moves left counted as 0).",
-    "Supports: " .. BOUND_NAME .. "'s use_edge_position: once Mario is 15/16",
-    "px or more clear of the left edge, the edge push can't take him",
-    "further.",
+    "Tests: at every frame t of R29, from every earlier frame j within",
+    CFG.K .. " frames: Mario's x at t is at most the larger of his x at j and",
+    "the left edge at j plus 15/16 px, plus the moves his speed byte made",
+    "from j to t (moves left counted as 0).",
+    "Supports: " .. BOUND_NAME .. "'s use_edge_position: once Mario is 15/16 px or",
+    "more clear of the left edge, the edge push can't take him further.",
   })
   local COMBOS = {}
   if B then

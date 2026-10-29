@@ -1,31 +1,28 @@
 # Open claims
 
-These are claims about the bound, its scope and the searches that aren't
-confirmed in the ROM yet, plus ideas for tightening the bound. Each row says:
+These are claims about the bound, its scope and the searches that aren't confirmed in the ROM yet,
+plus ideas for tightening the bound. Each row says:
 - what confirming or adopting the claim would change;
 - how strong the evidence is now;
 - what test would move it forward.
 
 **Evidence levels**
 - **ROM:** confirmed in FCEUX on the real ROM.
-- **Model:** checked exhaustively in `smbmodel.lua`, by
-  `smb1_model_validation.lua`.
-- **Argued:** reasoned from the code or the design, not checked
-  mechanically.
+- **Model:** checked exhaustively in `smbmodel.lua`, by `smb1_model_validation.lua`.
+- **Argued:** reasoned from the code or the design, not checked mechanically.
 - **None:** an idea, not yet examined.
 
-**Keeping it current.** Evidence cites only claims these scripts check
-(R1-R38, M1-M11), so anyone can rerun it; one-off runs aren't cited. When a
-run changes a row's evidence, update the row with the date and the claim
-that settled it. When a claim is settled either way, move it to Settled.
+**Keeping it current.** Evidence cites only claims these scripts check (R1-R42, M1-M12), so anyone
+can rerun it; one-off runs aren't cited. When a run changes a row's evidence, update the row with
+the date and the claim that settled it. When a claim is settled either way, move it to Settled.
 
-Status as of 2026-10-25. The ROM suite has not run on the ROM yet. Rows
-marked "once run" move when it passes.
+Status as of 2026-10-27. The ROM suite has not run on the ROM yet. Rows marked "once run" move when
+it passes.
 
 ## Tightening the bound
 
-Ceilings are at the 1-1 start (x 40, speed 0, frame 0). The bound's are
-123.9375 speed only and 115.6875 with the latch rule.
+Ceilings are at the 1-1 start (x 40, speed 0, frame 0). bound2's are 123.9375 speed only and
+115.6875 with the latch rule.
 
 | Claim | What it changes | Evidence now | Next step |
 |---|---|---|---|
@@ -34,7 +31,10 @@ Ceilings are at the 1-1 start (x 40, speed 0, frame 0). The bound's are
 | No edge push, by score only | Start ceiling 123.0625 | Model: as above (M9). Dropping both this and the free frames fails, at 64 states | As above |
 | One free frame wherever the latch rule applies, by score only | Latch-rule start ceiling 114.6875 | Model: holds by score (M10, closest 0.5625 px); broken frame by frame (68,992 pairs). R17 shows such a line on the ROM, once run | As the other score-only rows |
 | The latch rule on by default | Start ceiling 115.6875 | Model (M7, M8) | R32, once run; then choose the 03 scripts' default |
-| A tighter rule from 25 up: +228 a frame until a turnaround frame unlocks 456 | About 1 px tighter (122.875 at the start), but harder to explain | Not checked here yet. R21 shows its key fact on the ROM, once run: +228 a frame from 25, facing forward | Add it as a variant in M10 |
+| The facing rule (`use_facing_rule` in `bound3.lua`): from 25 up, 228 a frame or a turnaround; no free frames for a moving state facing its motion | Start ceilings 122.875 and 114.625 (latch rule); about 1 px tighter on average over all model states | Model: holds frame by frame and by score, each part needed (M7-M9). Its game facts: R21, R36; reached: R39, R40, once run | R42, once run; then decide whether the searches use it |
+| Edge position (`use_edge_position` in `bound3.lua`): no edge push once Mario is 15/16 px clear of the left edge | 0.875 px off the start ceilings (122.0 and 113.75 with the facing rule) | Model: his moves stay within the ramp without the allowance (M7, M8). That the edge can't add to them: argued from R27, R30, R31 and R37 | R41 and R42, once run |
+| The walking cap of 24 means 25 is first reached on a running frame | Tighter around speeds 20-25 | None. Deferred 2026-10-27: too frame- and path-specific for the gain | None for now |
+| A turnaround with the latch set (or $0700 >= 33) loses 208, not 152 | Slightly tighter from 25 up | None. Deferred 2026-10-27: depends on the path | None for now |
 | Jump timing in the model: Mario can't land on just any frame | Tighter where a line needs a jump, such as the latched 416 in the air | None | Check the vertical physics against the ROM first |
 
 ## Scope
@@ -44,6 +44,7 @@ Ceilings are at the 1-1 start (x 40, speed 0, frame 0). The bound's are
 | 8-4's stair risers push Mario at most 1 px, so a flat +1 px covers them | Lets the bound run on 8-4 | Argued | Add the riser positions to the model and check there, then on the ROM |
 | Landings never push Mario sideways on 8-4's stairs or other levels, as in the 1-1 opening | 8-4 and other levels | For the 1-1 opening only: R28 and R31, once run | The same jump sweep on 8-4's stairs |
 | Moving platforms; detecting death in lava | 8-4 | None | When the 8-4 work starts |
+| The edge facts (R27, R30, R31, R41) hold beyond sampled play from the 1-1 start: everywhere near the edge, and at any edge position in a flat area with no platforms or walls | The edge push and edge position, exhaustively and away from the 1-1 start | Argued from the code: ScrollHandler scrolls only from screen x 80 ($50) and never left; KeepOnscr keeps the subpixel. ROM: R27 sweeps the 1-1 start's edge; R31 and R41 sample play from the start, once run | An exhaustive short sweep from states near the edge. For a new start: R27's sweep at other edge positions, including a page boundary; the start state in the model's set (SM.in_set); R28's jumps on the new floor. With scroll lock on, the right-edge clamp acts as a wall |
 
 ## Validation gaps
 
@@ -62,7 +63,7 @@ Ceilings are at the 1-1 start (x 40, speed 0, frame 0). The bound's are
 | Full-RAM dedup is sound: two nodes with the same RAM have the same futures | Every dedup result | Argued: assumes the console's other state (CPU registers, PPU) doesn't matter at frame boundaries | Replay a sample of merged pairs and compare their futures |
 | Taking the minimum with the parent's ceiling is sound | All pruning | Argued: both ceilings bound the same future lines | None needed |
 | Every 03 script carries the bound file's text exactly | Every result under the bound | Not yet: the bound isn't in the 03 scripts | Once it is, add a check that compares each script's bound section with the bound file |
-| The 1-1 search results hold under the current bound | The published results (RTA 103.813, L+R 110.563) | None under the current bound | Rerun both under the current bound |
+| No line beats the known openings: HappyLee's TAS (110.5625, full speed on frame 32) and, under RTA rules, Maru's (103.8125, frame 34) | The project's goal for the 1-1 start | None: both scores come from playing those runs back (01_CollectKeyTasData), not from a search | An exhausted 03 search under the current bound |
 
 ## Settled
 
@@ -74,3 +75,4 @@ Ceilings are at the 1-1 start (x 40, speed 0, frame 0). The bound's are
 | Only the speed byte moves Mario | ROM: R37 exhaustively and R29 in play, once run |
 | The latch rule needs its speed >= 0 test, frame by frame (and by score too, with the burst check) | Model (M9). ROM: R15, once run |
 | The ramp must start from max(v, 0), by score too | Model (M9). ROM: R6, once run |
+| Each part of the facing rule is needed: the floor frame by frame, the turned branch and the already-turned case by score too | Model (M9). ROM: R39, once run |
