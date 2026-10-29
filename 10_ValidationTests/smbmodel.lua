@@ -1,13 +1,13 @@
 -- smbmodel.lua
 -- Variant: reference model, one frame of Mario's horizontal physics
 --
--- One frame of Mario's left-right movement in Super Mario Bros. (NTSC), as
--- the game's code computes it, written from the SMBDIS.ASM disassembly in
--- References/. Names in CamelCase below are its labels.
+-- One frame of Mario's left-right movement in Super Mario Bros. (NTSC), as the game's code
+-- computes it, written from the SMBDIS.ASM disassembly in References/. Names in CamelCase below
+-- are its labels.
 --
--- Scope: small Mario, on land (not water), in normal play (the player
--- control routine, GameEngineSubroutine = 8), with no wall, block,
--- platform or vine touching him. The 1-1 opening is such a place.
+-- Scope: small Mario, on land (not water), in normal play (the player control routine,
+-- GameEngineSubroutine = 8), with no wall, block, platform or vine touching him. The 1-1 opening
+-- is such a place.
 --
 -- How this file is used:
 --   smb1_rom_validation.lua  checks it against the real ROM in FCEUX
@@ -15,19 +15,17 @@
 --
 -- Units. The model holds Mario's speed as one signed number,
 --   speed = 256 * $57 + $0705
--- where $57 (Player_X_Speed) is the speed byte, in subpixels (1/16 px) per
--- frame, and $0705 (Player_X_MoveForce) is its fraction. So 256 is one
--- subpixel per frame, and an acceleration of 456 adds 456/256 of a
--- subpixel per frame, each frame. Only the speed byte moves Mario: each
+-- where $57 (Player_X_Speed) is the speed byte, in subpixels (1/16 px) per frame, and $0705
+-- (Player_X_MoveForce) is its fraction. So 256 is one subpixel per frame, and an acceleration of
+-- 456 adds 456/256 of a subpixel per frame, each frame. Only the speed byte moves Mario: each
 -- frame his position changes by speed byte / 16 px.
 --
--- What the model does not simulate. Instead of simulating these, it takes
--- them as inputs, so a caller can try every case:
---   - whether the frame starts on the ground, and whether a jump starts
---     (vertical motion is not modeled);
+-- What the model does not simulate. Instead of simulating these, it takes them as inputs, so a
+-- caller can try every case:
+--   - whether the frame starts on the ground, and whether a jump starts (vertical motion is not
+--     modeled);
 --   - whether RunningTimer still allows running without B;
---   - whether the left screen edge clamps Mario this frame (his position
---     is not modeled).
+--   - whether the left screen edge clamps Mario this frame (his position is not modeled).
 
 local SM = {}
 local floor = math.floor
@@ -56,45 +54,42 @@ SM.split = split
 -- In, the state at the start of the frame:
 --   speed      256 * $57 + $0705 (see Units)
 --   facing     $33 PlayerFacingDir: 1 right, 2 left, 3 after Left+Right
---   moving     $45 Player_MovingDir: 1 right, 2 left; 0 or 3 only while
---              the speed byte is 0
---   abs        $0700 Player_XSpeedAbsolute, as the game last wrote it. It
---              can be stale: the left edge can zero the speed byte after
---              it was written.
+--   moving     $45 Player_MovingDir: 1 right, 2 left; 0 or 3 only while the speed byte is 0
+--   abs        $0700 Player_XSpeedAbsolute, as the game last wrote it. It can be stale: the left
+--              edge can zero the speed byte after it was written.
 --   latch      $0703 RunningSpeed is nonzero
 --   on_ground  $1D Player_State is 0
 -- In, this frame:
 --   lr         Left/Right as pressed: 0 none, 1 Right, 2 Left, 3 both
 --   down       Down is held
---   other      B, Up or Select is held (a button other than A, Left,
---              Right and Down)
---   run_ok     B is held, or RunningTimer ($0783) is 2 or more before the
---              frame (it counts down once before the game logic runs)
+--   other      B, Up or Select is held (a button other than A, Left, Right and Down). A held
+--              Select counts only on its first frame: ReadPortBits drops it after that
+--   run_ok     B is held, or RunningTimer ($0783) is 2 or more before the frame (it counts down
+--              once before the game logic runs)
 --   jump       A is newly pressed while on the ground
 --   pinned     the left screen edge clamps Mario this frame (KeepOnscr)
 -- Out, in this order:
 --   speed, facing, moving, abs, latch   the state at the end of the frame
---   move_speed  the speed that moved Mario this frame (an edge clamp can
---               zero the speed byte afterwards)
---   airborne    the frame used the air rules (already in the air, or a
---               jump started this frame)
+--   move_speed  the speed that moved Mario this frame (an edge clamp can zero the speed byte
+--               afterwards)
+--   airborne    the frame used the air rules (already in the air, or a jump started this frame)
 --   running     the running rules applied (cap 40, adder 228)
 --   lr_used     Left/Right after Down cancelled them
 --   adder       the acceleration chosen, after any doubling
 --   applied     whether adder was added or subtracted this frame
--- Returns nil when `pinned` is impossible: the speed byte is 16 or more,
--- so Mario moved at least a pixel to the right of the edge.
+-- Returns nil when `pinned` is impossible: the speed byte is 16 or more, so Mario moved at least a
+-- pixel to the right of the edge.
 function SM.step(speed, facing, moving, abs, latch, on_ground,
                  lr, down, other, run_ok, jump, pinned)
   local byte, frac = split(speed)
 
-  -- On the ground, Down cancels Left/Right for the acceleration and
-  -- facing code. The latch and skid checks below read the raw buttons.
+  -- On the ground, Down cancels Left/Right for the acceleration and facing code. The latch and
+  -- skid checks below read the raw buttons.
   local lr_used = lr
   if on_ground and down and lr_used ~= 0 then lr_used = 0 end
 
-  -- A jump starts before the acceleration is chosen (ProcJumping runs
-  -- before X_Physics), so the jump frame already uses the air rules.
+  -- A jump starts before the acceleration is chosen (ProcJumping runs before X_Physics), so the
+  -- jump frame already uses the air rules.
   local airborne = (not on_ground) or jump
 
   -- X_Physics: choose the speed cap and the adder.
@@ -115,8 +110,8 @@ function SM.step(speed, facing, moving, abs, latch, on_ground,
       adder = WALK_ADD
     end
   end
-  -- The adder doubles when Mario faces away from his motion (asl/rol of
-  -- FrictionAdderLow/High). This is the basis of fast acceleration.
+  -- The adder doubles when Mario faces away from his motion (asl/rol of FrictionAdderLow/High).
+  -- This is the basis of fast acceleration.
   if facing ~= moving then adder = 2 * adder end
 
   local new_facing, new_moving, new_latch = facing, moving, latch
@@ -136,14 +131,13 @@ function SM.step(speed, facing, moving, abs, latch, on_ground,
     if lr_used ~= 0 then new_facing = lr_used end
   end
 
-  -- ImposeFriction: always on the ground; in the air only while Left or
-  -- Right is held.
+  -- ImposeFriction: always on the ground; in the air only while Left or Right is held.
   local new_abs, applied = abs, false
   if (not airborne) or lr_used ~= 0 then
     local dir
     if lr_used == 0 then
-      -- No direction: slow toward zero. The test reads the speed byte
-      -- only, so at byte 0 nothing happens, whatever the fraction.
+      -- No direction: slow toward zero. The test reads the speed byte only, so at byte 0 nothing
+      -- happens, whatever the fraction.
       if byte > 0 then dir = -1 elseif byte < 0 then dir = 1 else dir = 0 end
     elseif lr_used % 2 == 1 then
       dir = 1                                   -- Right, or Left+Right
@@ -164,9 +158,8 @@ function SM.step(speed, facing, moving, abs, latch, on_ground,
   -- The moving direction follows the sign of a nonzero speed byte.
   if byte > 0 then new_moving = 1 elseif byte < 0 then new_moving = 2 end
 
-  -- KeepOnscr: at the left edge the game puts Mario back on the edge and
-  -- zeroes the speed byte unless exactly Right is held. It keeps the
-  -- fraction, $0700 and the moving direction.
+  -- KeepOnscr: at the left edge the game puts Mario back on the edge and zeroes the speed byte
+  -- unless exactly Right is held. It keeps the fraction, $0700 and the moving direction.
   if pinned then
     if byte >= 16 then return nil end
     if lr_used ~= 1 then byte = 0 end
@@ -176,29 +169,26 @@ function SM.step(speed, facing, moving, abs, latch, on_ground,
          move_speed, airborne, running, lr_used, adder, applied
 end
 
--- SM.in_set: the states the model covers. smb1_model_validation.lua checks
--- that SM.step never leaves this set; smb1_rom_validation.lua checks that
--- real play never leaves it.
---   - the fraction is a multiple of 4 (every adder is), and the speed lies
---     between SPEED_MIN and SPEED_MAX; abs is at most 40
+-- SM.in_set: the states the model covers. smb1_model_validation.lua checks that SM.step never
+-- leaves this set; smb1_rom_validation.lua checks that real play never leaves it.
+--   - the fraction is a multiple of 4 (every adder is), and the speed lies between SPEED_MIN and
+--     SPEED_MAX; abs is at most 40
 --   - a nonzero speed byte: abs equals its size, and moving is its sign
---   - speed byte 0: abs is below 16, or Mario is moving left (only a run
---     left into the edge zeroes the byte while abs is that high)
+--   - speed byte 0: abs is below 16, or Mario is moving left (only a run left into the edge zeroes
+--     the byte while abs is that high)
 function SM.in_set(speed, facing, moving, abs, latch)
-  if speed % 4 ~= 0 or speed < SM.SPEED_MIN or speed > SM.SPEED_MAX
-     or abs > 40 then
+  if speed % 4 ~= 0 or speed < SM.SPEED_MIN or speed > SM.SPEED_MAX or abs > 40 then
     return false
   end
   local byte = floor(speed / 256)
   if byte ~= 0 then
-    return abs == ((byte < 0) and -byte or byte)
-       and moving == ((byte > 0) and 1 or 2)
+    return abs == ((byte < 0) and -byte or byte) and moving == ((byte > 0) and 1 or 2)
   end
   return abs < 16 or moving == 2
 end
 
--- SM.states: every state in the set, as a list of
--- {speed, facing, moving, abs, latch}, in a fixed order.
+-- SM.states: every state in the set, as a list of {speed, facing, moving, abs, latch}, in a fixed
+-- order.
 function SM.states()
   local list = {}
   for speed = SM.SPEED_MIN, SM.SPEED_MAX, SM.FRACTION_STEP do
