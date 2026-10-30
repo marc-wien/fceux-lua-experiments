@@ -1,11 +1,11 @@
 SMB1 ROM validation for the acceleration bound
-Date: 2026-10-29 18:52
+Date: 2026-10-29 21:02
 Files tested (Adler-32 of each file's text, line endings ignored):
-  c58622bc  C:\Users\Marc\fceux-2.6.6-win64\fceux-lua-experiments\10_ValidationTests\smb1_rom_validation.lua
+  d5db3c0c  C:\Users\Marc\fceux-2.6.6-win64\fceux-lua-experiments\10_ValidationTests\smb1_rom_validation.lua
   db130524  C:\Users\Marc\fceux-2.6.6-win64\fceux-lua-experiments\10_ValidationTests\smbmodel.lua
   ad97a4b1  C:\Users\Marc\fceux-2.6.6-win64\fceux-lua-experiments\10_ValidationTests\bound_harness.lua
   60a272f4  C:\Users\Marc\fceux-2.6.6-win64\fceux-lua-experiments\10_ValidationTests\../02_BoundAcceleration/bound3.lua
-Sections: setup, witnesses, gotchas, facing, buttons, edge, jumps, play, backgrounds, exhaustive; exhaustive stride 1; seed 20261025
+Sections: setup, witnesses, gotchas, facing, buttons, edge, jumps, play, backgrounds, held_select, scroll, dedup, exhaustive; exhaustive stride 50; seed 20261025
 
 How to read this log
   Each claim states a behavior of the ROM. Its block gives the claim's
@@ -505,12 +505,13 @@ R42  bound3's facing rule and edge position hold in real play  [sampled]
       the bound's own RAM tests (already_turned, holds_no_burst,
       clear_of_left_edge) at every frame.
       Supports: use_facing_rule and use_edge_position, on the ROM.
-      ... 853 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
-      ... 1751 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
-      ... 2635 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
-      ... 3557 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
-      ... 4481 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
-      ... 5373 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
+      ... 718 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
+      ... 1401 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
+      ... 2094 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
+      ... 2798 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
+      ... 3692 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
+      ... 4610 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
+      ... 5548 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
       -> R29 PASS (480000 checks, 0 failed)
       -> R30 PASS (480000 checks, 0 failed)
       -> R31 PASS (480000 checks, 0 failed)  farthest right of the edge: 112 px; farthest x: 190; closest enemy: 156 px
@@ -532,15 +533,71 @@ R34  One frame doesn't depend on RAM the model ignores  [sampled]
       Supports: R35-R38 use one background and subpixel 0.
       -> R34 PASS (136680 checks, 0 failed)
 
+R43  A held Select counts only on its first frame  [sequence]
+      Tests: Right+B from the start to speed 14 or more, then Select alone,
+      held. On its first frame SavedJoypadBits ($06FC) has Select; on every
+      frame after, it doesn't (ReadPortBits drops Select while it is also in
+      JoypadBitMask, $074A), so once $0700 is below 11 the skid reset
+      (ProcSkid: a non-A button held, Left/Right not matching the moving
+      direction) still doesn't zero the speed. Then a frame with no buttons,
+      and Select again: it counts, and the speed is zeroed. Every frame must
+      also match the model, given JoypadBitMask.
+      Rules out: Select counting on every frame it is held.
+      Supports: R29's input mapping (M.inputs).
+    Right+B x16: speed 0E:8C (14.547), facing 1, moving 1, $0700 14, latch clear
+    Select x10: $06FC $20, then $00; $0700 below 11 on 4 held frames; speed 08:04 (8.016) at the end
+    no buttons, then Select: $06FC $20, speed 00:00 (0.000)
+      -> R43 PASS (16 checks, 0 failed)
+
+R44  The screen scrolls only while Mario is 80 px or more right of its left edge  [sweep]
+      Tests (states written into RAM): Mario 0 to 130 px right of the left edge
+      (Player_Pos_ForScroll, $0755, set to match), at each speed byte -40 to
+      +40, subpixel $00 or $F0, on the ground and in the air, under -, R, RB
+      and LB; over the start and over R34's scrolled screen (a run right and
+      a stop). After the frame: the edge never moved left; if it moved,
+      Mario was 80 px or more clear of it before the frame, it moved no more
+      than he did, and he ends 64 px or more clear; he never ends left of it.
+      And it does scroll from 80 px on (ScrollHandler's $50).
+      Supports: edge position's scroll step, which R31 samples in play; with
+      R27 and R37, every one-frame fact the edge argument uses is swept.
+      -> R44 PASS (339553 checks, 0 failed)  scrolled from 80 px on; at most 3 px a frame; Mario at least 80 px clear after
+
+R45  States with the same RAM at the same frame have the same future  [sampled]
+      Tests: from 3 anchors (R29's setups: the start, a run to the latch,
+      Left+Right into the edge), every line of up to 3 frames over the searches'
+      36 inputs (no Left+Right or Up+Down), merged as the searches' dedup
+      merges them: a line that reaches a frame with RAM another line already
+      had there is its twin, and isn't followed further. For up to 100
+      twin pairs per anchor, both lines are replayed, their RAM compared, and
+      3 random continuations of 60 frames (R29's inputs) played from
+      each; all 2 KB of RAM must match after every frame.
+      Supports: the searches' full-RAM dedup, on the very merges it makes.
+
+R46  A state's future depends only on its RAM  [sampled]
+      Tests: 100 states from random play (R29's setups and inputs, stopped
+      at a random frame). Each one's 2 KB of RAM is written over each of
+      R34's three backgrounds, whose console state outside RAM differs (the
+      screen's contents in the PPU, among others); then 3 random
+      continuations of 60 frames are played from the state itself and from
+      each copy. All 2 KB of RAM must match after every frame.
+      Rules out: state outside RAM (CPU registers, the PPU, the APU)
+      changing what the game does next.
+      Supports: the searches' full-RAM dedup; a harsher test than R45.
+    from the start (no inputs): 12744 lines, 10228 twins; following 100 pairs, e.g. -, BA, DBA and -, DLA, DBA
+    from a run to the latch (RB x33, - x2): 10332 lines, 8554 twins; following 100 pairs, e.g. BA, LBA, UL and BA, DLBA, UL
+    from Left+Right into the edge (LB x35, LR x2): 10332 lines, 8286 twins; following 100 pairs, e.g. L, LBA, DB and L, LA, DB
+      -> R45 PASS (54900 checks, 0 failed)
+      -> R46 PASS (54900 checks, 0 failed)
+
 R35  Every state and input case: the next state matches the model  [exhaustive]
-      Every state in the model's set (64896; this run checks 64896:
-      states 1 to 64896, every 1), written into RAM over the
+      Every state in the model's set (64896; this run checks 1298:
+      states 1 to 64896, every 50), written into RAM over the
       start state; then one frame. On the ground: Left/Right none, R, L,
       LR; Down or not; no other button (RunningTimer 0 or 10), Select, or
       B; A newly pressed or not (64 cases). In the air
       (y 100, falling): Left/Right none, R, L, LR (4 cases; R26 checks the
       other buttons don't matter there). Each case at x 96 and on the left
-      edge: 136 frames per state, 8825856 in all.
+      edge: 136 frames per state, 176528 in all.
       Tests: the ROM's speed and fraction, facing, moving direction, $0700
       and latch after the frame equal the model's.
       Supports: the model checks (smb1_model_validation.lua) describe the
@@ -565,85 +622,11 @@ R38  Every state and input case: a jump starts on the frame A is pressed  [exhau
       when A is newly pressed, and that frame already uses the air rules
       (R35 compares it with the model's air step); air frames stay in air.
       Supports: the model's jump timing (ProcJumping before X_Physics).
-      ... state 978 (978 of 64896, 1.5%), 133008 frames, mismatches 0/0/0/0, elapsed 0:01:00, about 1:05:21 to go
-      ... state 1891 (1891 of 64896, 2.9%), 257176 frames, mismatches 0/0/0/0, elapsed 0:02:00, about 1:06:38 to go
-      ... state 2673 (2673 of 64896, 4.1%), 363528 frames, mismatches 0/0/0/0, elapsed 0:03:00, about 1:09:50 to go
-      ... state 3453 (3453 of 64896, 5.3%), 469608 frames, mismatches 0/0/0/0, elapsed 0:04:00, about 1:11:10 to go
-      ... state 4235 (4235 of 64896, 6.5%), 575960 frames, mismatches 0/0/0/0, elapsed 0:05:00, about 1:11:37 to go
-      ... state 5014 (5014 of 64896, 7.7%), 681904 frames, mismatches 0/0/0/0, elapsed 0:06:00, about 1:11:39 to go
-      ... state 5802 (5802 of 64896, 8.9%), 789072 frames, mismatches 0/0/0/0, elapsed 0:07:00, about 1:11:17 to go
-      ... state 6586 (6586 of 64896, 10.1%), 895696 frames, mismatches 0/0/0/0, elapsed 0:08:00, about 1:10:49 to go
-      ... state 7386 (7386 of 64896, 11.4%), 1004496 frames, mismatches 0/0/0/0, elapsed 0:09:00, about 1:10:04 to go
-      ... state 8172 (8172 of 64896, 12.6%), 1111392 frames, mismatches 0/0/0/0, elapsed 0:10:00, about 1:09:24 to go
-      ... state 8961 (8961 of 64896, 13.8%), 1218696 frames, mismatches 0/0/0/0, elapsed 0:11:00, about 1:08:39 to go
-      ... state 9752 (9752 of 64896, 15.0%), 1326272 frames, mismatches 0/0/0/0, elapsed 0:12:00, about 1:07:51 to go
-      ... state 10543 (10543 of 64896, 16.2%), 1433848 frames, mismatches 0/0/0/0, elapsed 0:13:00, about 1:07:01 to go
-      ... state 11499 (11499 of 64896, 17.7%), 1563864 frames, mismatches 0/0/0/0, elapsed 0:14:00, about 1:05:00 to go
-      ... state 12429 (12429 of 64896, 19.2%), 1690344 frames, mismatches 0/0/0/0, elapsed 0:15:00, about 1:03:19 to go
-      ... state 13309 (13309 of 64896, 20.5%), 1810024 frames, mismatches 0/0/0/0, elapsed 0:16:00, about 1:02:01 to go
-      ... state 14229 (14229 of 64896, 21.9%), 1935144 frames, mismatches 0/0/0/0, elapsed 0:17:00, about 1:00:32 to go
-      ... state 15218 (15218 of 64896, 23.4%), 2069648 frames, mismatches 0/0/0/0, elapsed 0:18:00, about 0:58:45 to go
-      ... state 16228 (16228 of 64896, 25.0%), 2207008 frames, mismatches 0/0/0/0, elapsed 0:19:00, about 0:56:58 to go
-      ... state 17097 (17097 of 64896, 26.3%), 2325192 frames, mismatches 0/0/0/0, elapsed 0:20:00, about 0:55:54 to go
-      ... state 17962 (17962 of 64896, 27.7%), 2442832 frames, mismatches 0/0/0/0, elapsed 0:21:00, about 0:54:52 to go
-      ... state 18825 (18825 of 64896, 29.0%), 2560200 frames, mismatches 0/0/0/0, elapsed 0:22:00, about 0:53:50 to go
-      ... state 19687 (19687 of 64896, 30.3%), 2677432 frames, mismatches 0/0/0/0, elapsed 0:23:00, about 0:52:49 to go
-      ... state 20549 (20549 of 64896, 31.7%), 2794664 frames, mismatches 0/0/0/0, elapsed 0:24:00, about 0:51:47 to go
-      ... state 21411 (21411 of 64896, 33.0%), 2911896 frames, mismatches 0/0/0/0, elapsed 0:25:00, about 0:50:46 to go
-      ... state 22273 (22273 of 64896, 34.3%), 3029128 frames, mismatches 0/0/0/0, elapsed 0:26:00, about 0:49:45 to go
-      ... state 23137 (23137 of 64896, 35.7%), 3146632 frames, mismatches 0/0/0/0, elapsed 0:27:00, about 0:48:43 to go
-      ... state 24000 (24000 of 64896, 37.0%), 3264000 frames, mismatches 0/0/0/0, elapsed 0:28:00, about 0:47:42 to go
-      ... state 24864 (24864 of 64896, 38.3%), 3381504 frames, mismatches 0/0/0/0, elapsed 0:29:00, about 0:46:41 to go
-      ... state 25718 (25718 of 64896, 39.6%), 3497648 frames, mismatches 0/0/0/0, elapsed 0:30:00, about 0:45:42 to go
-      ... state 26581 (26581 of 64896, 41.0%), 3615016 frames, mismatches 0/0/0/0, elapsed 0:31:00, about 0:44:41 to go
-      ... state 27442 (27442 of 64896, 42.3%), 3732112 frames, mismatches 0/0/0/0, elapsed 0:32:00, about 0:43:40 to go
-      ... state 28306 (28306 of 64896, 43.6%), 3849616 frames, mismatches 0/0/0/0, elapsed 0:33:00, about 0:42:39 to go
-      ... state 29170 (29170 of 64896, 44.9%), 3967120 frames, mismatches 0/0/0/0, elapsed 0:34:00, about 0:41:38 to go
-      ... state 30033 (30033 of 64896, 46.3%), 4084488 frames, mismatches 0/0/0/0, elapsed 0:35:00, about 0:40:37 to go
-      ... state 30897 (30897 of 64896, 47.6%), 4201992 frames, mismatches 0/0/0/0, elapsed 0:36:00, about 0:39:36 to go
-      ... state 31761 (31761 of 64896, 48.9%), 4319496 frames, mismatches 0/0/0/0, elapsed 0:37:00, about 0:38:36 to go
-      ... state 32624 (32624 of 64896, 50.3%), 4436864 frames, mismatches 0/0/0/0, elapsed 0:38:00, about 0:37:35 to go
-      ... state 33489 (33489 of 64896, 51.6%), 4554504 frames, mismatches 0/0/0/0, elapsed 0:39:00, about 0:36:34 to go
-      ... state 34352 (34352 of 64896, 52.9%), 4671872 frames, mismatches 0/0/0/0, elapsed 0:40:00, about 0:35:33 to go
-      ... state 35214 (35214 of 64896, 54.3%), 4789104 frames, mismatches 0/0/0/0, elapsed 0:41:00, about 0:34:33 to go
-      ... state 36077 (36077 of 64896, 55.6%), 4906472 frames, mismatches 0/0/0/0, elapsed 0:42:00, about 0:33:33 to go
-      ... state 36941 (36941 of 64896, 56.9%), 5023976 frames, mismatches 0/0/0/0, elapsed 0:43:00, about 0:32:32 to go
-      ... state 37803 (37803 of 64896, 58.3%), 5141208 frames, mismatches 0/0/0/0, elapsed 0:44:00, about 0:31:32 to go
-      ... state 38658 (38658 of 64896, 59.6%), 5257488 frames, mismatches 0/0/0/0, elapsed 0:45:00, about 0:30:32 to go
-      ... state 39522 (39522 of 64896, 60.9%), 5374992 frames, mismatches 0/0/0/0, elapsed 0:46:00, about 0:29:31 to go
-      ... state 40384 (40384 of 64896, 62.2%), 5492224 frames, mismatches 0/0/0/0, elapsed 0:47:00, about 0:28:31 to go
-      ... state 41249 (41249 of 64896, 63.6%), 5609864 frames, mismatches 0/0/0/0, elapsed 0:48:00, about 0:27:31 to go
-      ... state 42111 (42111 of 64896, 64.9%), 5727096 frames, mismatches 0/0/0/0, elapsed 0:49:00, about 0:26:30 to go
-      ... state 42976 (42976 of 64896, 66.2%), 5844736 frames, mismatches 0/0/0/0, elapsed 0:50:00, about 0:25:30 to go
-      ... state 43838 (43838 of 64896, 67.6%), 5961968 frames, mismatches 0/0/0/0, elapsed 0:51:00, about 0:24:29 to go
-      ... state 44700 (44700 of 64896, 68.9%), 6079200 frames, mismatches 0/0/0/0, elapsed 0:52:00, about 0:23:29 to go
-      ... state 45561 (45561 of 64896, 70.2%), 6196296 frames, mismatches 0/0/0/0, elapsed 0:53:00, about 0:22:29 to go
-      ... state 46422 (46422 of 64896, 71.5%), 6313392 frames, mismatches 0/0/0/0, elapsed 0:54:00, about 0:21:29 to go
-      ... state 47271 (47271 of 64896, 72.8%), 6428856 frames, mismatches 0/0/0/0, elapsed 0:55:00, about 0:20:30 to go
-      ... state 48127 (48127 of 64896, 74.2%), 6545272 frames, mismatches 0/0/0/0, elapsed 0:56:00, about 0:19:30 to go
-      ... state 48990 (48990 of 64896, 75.5%), 6662640 frames, mismatches 0/0/0/0, elapsed 0:57:00, about 0:18:30 to go
-      ... state 49852 (49852 of 64896, 76.8%), 6779872 frames, mismatches 0/0/0/0, elapsed 0:58:00, about 0:17:30 to go
-      ... state 50715 (50715 of 64896, 78.1%), 6897240 frames, mismatches 0/0/0/0, elapsed 0:59:00, about 0:16:29 to go
-      ... state 51569 (51569 of 64896, 79.5%), 7013384 frames, mismatches 0/0/0/0, elapsed 1:00:00, about 0:15:30 to go
-      ... state 52427 (52427 of 64896, 80.8%), 7130072 frames, mismatches 0/0/0/0, elapsed 1:01:00, about 0:14:30 to go
-      ... state 53290 (53290 of 64896, 82.1%), 7247440 frames, mismatches 0/0/0/0, elapsed 1:02:00, about 0:13:30 to go
-      ... state 54154 (54154 of 64896, 83.4%), 7364944 frames, mismatches 0/0/0/0, elapsed 1:03:00, about 0:12:29 to go
-      ... state 55019 (55019 of 64896, 84.8%), 7482584 frames, mismatches 0/0/0/0, elapsed 1:04:00, about 0:11:29 to go
-      ... state 55883 (55883 of 64896, 86.1%), 7600088 frames, mismatches 0/0/0/0, elapsed 1:05:00, about 0:10:29 to go
-      ... state 56747 (56747 of 64896, 87.4%), 7717592 frames, mismatches 0/0/0/0, elapsed 1:06:00, about 0:09:28 to go
-      ... state 57612 (57612 of 64896, 88.8%), 7835232 frames, mismatches 0/0/0/0, elapsed 1:07:00, about 0:08:28 to go
-      ... state 58477 (58477 of 64896, 90.1%), 7952872 frames, mismatches 0/0/0/0, elapsed 1:08:00, about 0:07:27 to go
-      ... state 59342 (59342 of 64896, 91.4%), 8070512 frames, mismatches 0/0/0/0, elapsed 1:09:00, about 0:06:27 to go
-      ... state 60207 (60207 of 64896, 92.8%), 8188152 frames, mismatches 0/0/0/0, elapsed 1:10:00, about 0:05:27 to go
-      ... state 61069 (61069 of 64896, 94.1%), 8305384 frames, mismatches 0/0/0/0, elapsed 1:11:00, about 0:04:26 to go
-      ... state 61931 (61931 of 64896, 95.4%), 8422616 frames, mismatches 0/0/0/0, elapsed 1:12:00, about 0:03:26 to go
-      ... state 62795 (62795 of 64896, 96.8%), 8540120 frames, mismatches 0/0/0/0, elapsed 1:13:00, about 0:02:26 to go
-      ... state 63660 (63660 of 64896, 98.1%), 8657760 frames, mismatches 0/0/0/0, elapsed 1:14:00, about 0:01:26 to go
-      ... state 64514 (64514 of 64896, 99.4%), 8773904 frames, mismatches 0/0/0/0, elapsed 1:15:00, about 0:00:26 to go
-      -> R35 PASS (8825856 checks, 0 failed)  states 1-64896 every 1
-      -> R36 PASS (8825856 checks, 0 failed)
-      -> R37 PASS (8825856 checks, 0 failed)
-      -> R38 PASS (8825856 checks, 0 failed)
+      ... state 38001 (761 of 1298, 58.6%), 103496 frames, mismatches 0/0/0/0, elapsed 0:01:00, about 0:00:42 to go
+      -> R35 PASS (176528 checks, 0 failed)  states 1-64896 every 50
+      -> R36 PASS (176528 checks, 0 failed)
+      -> R37 PASS (176528 checks, 0 failed)
+      -> R38 PASS (176528 checks, 0 failed)
 
 Summary: behaviors of the ROM, each with how it was shown
   id   status     kind        behavior
@@ -689,4 +672,8 @@ Summary: behaviors of the ROM, each with how it was shown
   R40  PASS       sequence    Facing the motion, Left+Right then a 456 frame gains exactly two frames of 304
   R41  PASS       sampled     In play the left edge never carries Mario past where his own moves could
   R42  PASS       sampled     bound3's facing rule and edge position hold in real play
+  R43  PASS       sequence    A held Select counts only on its first frame
+  R44  PASS       sweep       The screen scrolls only while Mario is 80 px or more right of its left edge
+  R45  PASS       sampled     States with the same RAM at the same frame have the same future
+  R46  PASS       sampled     A state's future depends only on its RAM
 NO CLAIM FAILED (NOT RUN and NOT SHOWN are not failures; information-only claims say so)
