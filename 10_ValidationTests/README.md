@@ -167,7 +167,7 @@ rules out.
 - **R28** Every jump from the start lands cleanly, with no side push from the floor: A held 1-45
   frames, five jump strengths.
 
-**Real play** (sampled: 3,000 random runs from seven setups)
+**Real play** (sampled: 6,000 random runs from seven setups)
 - **R29** Every frame matches the model, including landings, timers and scrolling.
 - **R30** Every state reached is in the model's state set.
 - **R31** The screen and the scope stay as assumed:

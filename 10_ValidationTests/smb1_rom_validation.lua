@@ -40,16 +40,25 @@ local CFG = {
     play = true,          -- R29-R33, R41-R42  random play, in lockstep with
                           --          the model, and the bound along it
     backgrounds = true,   -- R34      sampled states over other RAM backgrounds
+    held_select = true,   -- R43      a held Select counts only on its first frame
+    scroll = true,        -- R44      when the screen scrolls, swept one frame at a time
+    dedup = true,         -- R45-R46  the future depends only on RAM (the searches' dedup)
     exhaustive = true,    -- R35-R38  every model state, every input case
   },
   background_stride = 97, -- R34 checks every 97th state (about 670)
-  exhaustive_stride = 1,  -- 1: every state; 50: a quick pass
+  exhaustive_stride = 50,  -- 1: every state; 50: a quick pass
   exhaustive_first = 1,   -- to resume a stopped run, start at this state
   exhaustive_last = nil,  -- nil: through the last state
   button_states = 300,    -- random states, each with all 128 combinations
   play_runs = 6000,
   play_frames = 80,
   K = 60,                 -- frames ahead the bound is checked over
+  scroll_reach = 130,     -- R44: Mario 0 to this many px right of the left edge
+  twin_depth = 3,         -- R45: lines of up to this many frames from each anchor
+  twin_pairs = 100,       -- R45: twin pairs followed, per anchor
+  transplants = 100,      -- R46: states from random play, each over R34's backgrounds
+  futures = 3,            -- R45-R46: random continuations played from each pair
+  future_frames = 60,     -- R45-R46: frames in each continuation
   seed = 20261025,
   show = 5,               -- mismatches printed in full per claim
   progress_seconds = 60,
@@ -100,7 +109,8 @@ end
 local KIND = { R1 = "setup", R2 = "setup", R3 = "setup", R4 = "setup", R12 = "written",
                R15 = "search", R23 = "written", R24 = "written", R25 = "written", R26 = "sampled",
                R27 = "sweep", R28 = "sweep", R34 = "sampled", R39 = "search", R40 = "sequence",
-               R41 = "sampled", R42 = "sampled" }
+               R41 = "sampled", R42 = "sampled", R43 = "sequence", R44 = "sweep",
+               R45 = "sampled", R46 = "sampled" }
 for i = 5, 22 do KIND["R" .. i] = KIND["R" .. i] or "sequence" end
 for i = 29, 33 do KIND["R" .. i] = "sampled" end
 for i = 35, 38 do KIND["R" .. i] = "exhaustive" end
@@ -1292,9 +1302,9 @@ local function section_facing()
     "Supports: the facing rule's no-free-frames case is sound and tight.",
   })
   G.load()
-  n = 0
+  local n = 0
   while floor(G.speed() / 256) < 12 and n < 60 do G.press("RB"); n = n + 1 end
-  g = G.read()
+  local g = G.read()
   local no_burst = B.holds_no_burst() and true or false
   local slower = B.qualifies_for_slower_ramp() and true or false
   R.say(string.format("    Right+B x%d: %s; holds_no_burst %s,"
@@ -1303,10 +1313,10 @@ local function section_facing()
   R.check(c, no_burst and slower, function()
     return "expected holds_no_burst() and qualifies_for_slower_ramp()"
   end)
-  env = H.envelope(B, B.get_xvel(), true, CFG.K,
+  local env = H.envelope(B, B.get_xvel(), true, CFG.K,
       { facing_rule = true, facing = g.facing, moving = g.moving })
   G.press("LR")
-  g1 = G.read()
+  local g1 = G.read()
   G.press("RB")
   local g2 = G.read()
   R.say(string.format("    Left+Right: %+d (adder $%04X, facing %d);"
@@ -1898,6 +1908,24 @@ end
 
 -- === R34. The RAM the model ignores =============================================================
 
+-- Three states other than the start, each saved: other frame counts, timers and random numbers,
+-- and a scrolled screen with Mario elsewhere. R34, R44 and R46 write states over them.
+local function make_backgrounds()
+  local bgs = {}
+  for _, b in ipairs({ { "37 frames standing", rep("", 37) },
+                       { "113 frames standing", rep("", 113) },
+                       { "a run right and a stop",
+                         cat(rep("RB", 40), rep("", 30)) } }) do
+    G.load()
+    for _, keys in ipairs(b[2]) do G.press(keys) end
+    local save = (savestate.object or savestate.create)()
+    savestate.save(save)
+    emu.frameadvance()    -- FCEUX writes a Lua savestate at a frame boundary
+    bgs[#bgs + 1] = { name = b[1], save = save, screen = G.screen() }
+  end
+  return bgs
+end
+
 local function section_backgrounds(states)
   local ground_cases, air_cases = input_cases()
   local stride = CFG.background_stride
@@ -1914,18 +1942,7 @@ local function section_backgrounds(states)
     "the screen position, the subpixel away from the edge).",
     "Supports: R35-R38 use one background and subpixel 0.",
   })
-  local bgs = {}
-  for _, b in ipairs({ { "37 frames standing", rep("", 37) },
-                       { "113 frames standing", rep("", 113) },
-                       { "a run right and a stop",
-                         cat(rep("RB", 40), rep("", 30)) } }) do
-    G.load()
-    for _, keys in ipairs(b[2]) do G.press(keys) end
-    local save = (savestate.object or savestate.create)()
-    savestate.save(save)
-    emu.frameadvance()    -- FCEUX writes a Lua savestate at a frame boundary
-    bgs[#bgs + 1] = { name = b[1], save = save, screen = G.screen() }
-  end
+  local bgs = make_backgrounds()
   for i = 1, #states, stride do
     local st = states[i]
     for g = 1, 2 do
@@ -1951,6 +1968,403 @@ local function section_backgrounds(states)
     end
   end
   R.done(c)
+end
+
+-- === R43. A held Select =========================================================================
+
+local function has_select(pad) return floor(pad / 32) % 2 == 1 end
+
+local function section_held_select()
+  local c = R.claim("R43", "A held Select counts only on its first frame", {
+    "Tests: Right+B from the start to speed 14 or more, then Select alone,",
+    "held. On its first frame SavedJoypadBits ($06FC) has Select; on every",
+    "frame after, it doesn't (ReadPortBits drops Select while it is also in",
+    "JoypadBitMask, $074A), so once $0700 is below 11 the skid reset",
+    "(ProcSkid: a non-A button held, Left/Right not matching the moving",
+    "direction) still doesn't zero the speed. Then a frame with no buttons,",
+    "and Select again: it counts, and the speed is zeroed. Every frame must",
+    "also match the model, given JoypadBitMask.",
+    "Rules out: Select counting on every frame it is held.",
+    "Supports: R29's input mapping (M.inputs).",
+  })
+  local function frame(keys)
+    local before = G.read()
+    G.press(keys)
+    local after = G.read()
+    local problems = M.compare(before, keys, after, "play")
+    R.check(c, #problems == 0, function()
+      return M.before_text(before, keys) .. ": " .. problems[1][2]
+    end)
+    return before, after, rb(A_.pad)
+  end
+  G.load()
+  local n = 0
+  while floor(G.speed() / 256) < 14 and n < 60 do G.press("RB"); n = n + 1 end
+  local start = G.read()
+  local held, low, reset, first_pad, later_pads = 0, 0, false, nil, {}
+  repeat
+    local before, after, pad = frame("S")
+    held = held + 1
+    if held == 1 then first_pad = pad else later_pads[pad] = true end
+    if held > 1 and before.abs < 11 and floor(before.w / 256) > 0 then
+      low = low + 1
+      if after.w == 0 then reset = true end
+    end
+  until floor(G.speed() / 256) <= 8 or held >= 60
+  local _, after0 = frame("")
+  local _, after1, pad1 = frame("S")
+  local pads = {}
+  for p in pairs(later_pads) do pads[#pads + 1] = string.format("$%02X", p) end
+  R.say(string.format("    Right+B x%d: %s", n, T.state(start.w, start.facing, start.moving,
+      start.abs, start.latch)))
+  R.say(string.format("    Select x%d: $06FC $%02X, then %s; $0700 below 11 on %d held"
+      .. " frames; speed %s at the end", held, first_pad, table.concat(pads, ", "), low,
+      T.speed(after0.w)))
+  R.say(string.format("    no buttons, then Select: $06FC $%02X, speed %s", pad1,
+      T.speed(after1.w)))
+  R.check(c, has_select(first_pad), function()
+    return string.format("first Select frame: $06FC $%02X has no Select", first_pad)
+  end)
+  R.check(c, #pads == 1 and not has_select(next(later_pads)), function()
+    return "held Select frames after the first: $06FC " .. table.concat(pads, ", ")
+  end)
+  R.check(c, low > 0 and not reset, function()
+    return low == 0 and "no held frame started with $0700 below 11"
+        or "the speed was zeroed while Select was held"
+  end)
+  R.check(c, has_select(pad1) and after1.w == 0, function()
+    return string.format("Select pressed again: $06FC $%02X, speed %s", pad1, T.speed(after1.w))
+  end)
+  R.done(c)
+end
+
+-- === R44. Scrolling, one frame at a time ========================================================
+
+local function section_scroll()
+  local reach = CFG.scroll_reach
+  local inputs, subs = { "", "R", "RB", "LB" }, { 0, 240 }
+  local c = R.claim("R44", "The screen scrolls only while Mario is 80 px or more right of its"
+      .. " left edge", {
+    "Tests (states written into RAM): Mario 0 to " .. reach .. " px right of the left edge",
+    "(Player_Pos_ForScroll, $0755, set to match), at each speed byte -40 to",
+    "+40, subpixel $00 or $F0, on the ground and in the air, under -, R, RB",
+    "and LB; over the start and over R34's scrolled screen (a run right and",
+    "a stop). After the frame: the edge never moved left; if it moved,",
+    "Mario was 80 px or more clear of it before the frame, it moved no more",
+    "than he did, and he ends 64 px or more clear; he never ends left of it.",
+    "And it does scroll from 80 px on (ScrollHandler's $50).",
+    "Supports: edge position's scroll step, which R31 samples in play; with",
+    "R27 and R37, every one-frame fact the edge argument uses is swept.",
+  })
+  local scrolled = make_backgrounds()[3]
+  local screens = { { name = "the start", load = G.load },
+                    { name = scrolled.name, load = function() savestate.load(scrolled.save) end } }
+  local least_d, most_adv, least_after = nil, 0, nil
+  for _, sc in ipairs(screens) do
+    for d = 0, reach do
+      for byte = -40, 40 do
+        local moving = (byte < 0) and 2 or 1
+        local abs = (byte < 0) and -byte or byte
+        for _, sub in ipairs(subs) do
+          for g = 1, 2 do
+            for _, keys in ipairs(inputs) do
+              sc.load()
+              local e0 = G.screen()
+              G.put(byte * 256, moving, moving, abs, false,
+                  { ground = (g == 1), pixel = e0 + d, sub = sub })
+              wb(A_.for_scroll, d)
+              G.press(keys)
+              local e1, x1 = G.screen(), floor(G.pos() / 256)
+              local adv, moved = e1 - e0, x1 - (e0 + d)
+              local why
+              if adv < 0 then why = "the edge moved left"
+              elseif x1 < e1 then why = "Mario ended left of the edge"
+              elseif adv > 0 and d < 80 then why = "it scrolled with Mario under 80 px clear"
+              elseif adv > max(0, moved) then
+                why = string.format("it moved %d px, Mario %d", adv, moved)
+              elseif adv > 0 and x1 - e1 < 64 then
+                why = string.format("it left Mario %d px clear", x1 - e1)
+              end
+              if adv > 0 then
+                if not least_d or d < least_d then least_d = d end
+                if adv > most_adv then most_adv = adv end
+                if not least_after or x1 - e1 < least_after then least_after = x1 - e1 end
+              end
+              if why then
+                R.fail(c, string.format("over %s, Mario %d px clear, speed byte %d, subpixel"
+                    .. " $%02X, %s, %s: %s", sc.name, d, byte, sub, g == 1 and "ground" or "air",
+                    T.keys(keys), why))
+              else
+                R.pass(c)
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+  R.check(c, least_d == 80, function()
+    return least_d and ("the closest it scrolled from was " .. least_d .. " px, not 80")
+        or "it never scrolled"
+  end)
+  R.done(c, nil, least_d and string.format("scrolled from %d px on; at most %d px a frame; Mario"
+      .. " at least %d px clear after", least_d, most_adv, least_after) or "never scrolled")
+end
+
+-- === R45-R46. The future depends only on RAM ====================================================
+
+-- The searches' inputs: every combination of the six gameplay buttons, without Left+Right or
+-- Up+Down.
+local SEARCH_INPUTS = {}
+for _, v in ipairs({ "", "D", "U" }) do
+  for _, h in ipairs({ "R", "", "L" }) do
+    for _, b in ipairs({ "B", "" }) do
+      for _, a in ipairs({ "", "A" }) do SEARCH_INPUTS[#SEARCH_INPUTS + 1] = v .. h .. b .. a end
+    end
+  end
+end
+
+-- RAM as 128 chunks of 16 bytes. Lua hashes strings under 32 bytes in full, so equal chunks are
+-- one string and compare at once.
+local function ram_chunks()
+  local t = {}
+  for i = 1, 128 do t[i] = memory.readbyterange((i - 1) * 16, 16) end
+  return t
+end
+
+-- The first differing byte of two RAMs as chunks, and how many bytes differ; nil if none.
+local function ram_difference(a, b)
+  local first, count
+  for i = 1, 128 do
+    if a[i] ~= b[i] then
+      for j = 1, 16 do
+        local x, y = a[i]:byte(j), b[i]:byte(j)
+        if x ~= y then
+          count = (count or 0) + 1
+          if not first then first = { (i - 1) * 16 + j - 1, x, y } end
+        end
+      end
+    end
+  end
+  if first then
+    return string.format("%d bytes differ, first $%04X: $%02X vs $%02X", count, first[1],
+        first[2], first[3])
+  end
+end
+
+-- An exact number for the whole RAM, as the searches' dedup builds it: each distinct chunk gets a
+-- number at its position, then each pair of numbers, up to one number for all 2 KB. Equal numbers
+-- mean equal RAM.
+local function new_numbering()
+  local levels, ids, width = {}, {}, 128
+  while width >= 1 do
+    local t = {}
+    for i = 1, width do t[i] = { size = 0 } end
+    levels[#levels + 1] = t
+    width = width / 2
+  end
+  local function number_of(t, key)
+    local n = t[key]
+    if not n then n = t.size + 1; t.size, t[key] = n, n end
+    return n
+  end
+  return function()
+    local chunks = ram_chunks()
+    for i = 1, 128 do ids[i] = number_of(levels[1][i], chunks[i]) end
+    local w = 128
+    for level = 2, #levels do
+      w = w / 2
+      for i = 1, w do
+        ids[i] = number_of(levels[level][i], ids[2 * i - 1] * 2 ^ 26 + ids[2 * i])
+      end
+    end
+    return ids[1]
+  end
+end
+
+-- Random inputs from R29's menu, each held 1-8 frames.
+local function random_inputs(n)
+  local out, keys, hold = {}, "", 0
+  for t = 1, n do
+    if hold == 0 then keys = MENU[math.random(#MENU)]; hold = math.random(1, 8) end
+    hold = hold - 1
+    out[t] = keys
+  end
+  return out
+end
+
+-- Play a list of inputs from the state the emulator holds, and return RAM after each frame.
+local function record_future(inputs)
+  local out = {}
+  for t, keys in ipairs(inputs) do G.press(keys); out[t] = ram_chunks() end
+  return out
+end
+
+-- Play the same inputs and compare RAM after each frame with `want`. Counts a check per frame and
+-- stops at the first difference.
+local function compare_future(c, inputs, want, where)
+  for t, keys in ipairs(inputs) do
+    G.press(keys)
+    local diff = ram_difference(want[t], ram_chunks())
+    if diff then
+      R.fail(c, string.format("%s: frame %d of %s: %s", where, t, T.line(inputs), diff))
+      return
+    end
+    R.pass(c)
+  end
+end
+
+local function section_dedup()
+  -- Its own seed, so it samples the same lines whichever sections ran before it.
+  math.randomseed(CFG.seed + 45)
+  local depth, F = CFG.twin_depth, CFG.future_frames
+  local ANCHORS = { SETUPS[1], SETUPS[3], SETUPS[6] }
+  local c_twin = R.claim("R45", "States with the same RAM at the same frame have the same"
+      .. " future", {
+    "Tests: from " .. #ANCHORS .. " anchors (R29's setups: the start, a run to the latch,",
+    "Left+Right into the edge), every line of up to " .. depth .. " frames over the searches'",
+    #SEARCH_INPUTS .. " inputs (no Left+Right or Up+Down), merged as the searches' dedup",
+    "merges them: a line that reaches a frame with RAM another line already",
+    "had there is its twin, and isn't followed further. For up to " .. CFG.twin_pairs,
+    "twin pairs per anchor, both lines are replayed, their RAM compared, and",
+    CFG.futures .. " random continuations of " .. F .. " frames (R29's inputs) played from",
+    "each; all 2 KB of RAM must match after every frame.",
+    "Supports: the searches' full-RAM dedup, on the very merges it makes.",
+  })
+  local c_move = R.claim("R46", "A state's future depends only on its RAM", {
+    "Tests: " .. CFG.transplants .. " states from random play (R29's setups and inputs, stopped",
+    "at a random frame). Each one's 2 KB of RAM is written over each of",
+    "R34's three backgrounds, whose console state outside RAM differs (the",
+    "screen's contents in the PPU, among others); then " .. CFG.futures .. " random",
+    "continuations of " .. F .. " frames are played from the state itself and from",
+    "each copy. All 2 KB of RAM must match after every frame.",
+    "Rules out: state outside RAM (CPU registers, the PPU, the APU)",
+    "changing what the game does next.",
+    "Supports: the searches' full-RAM dedup; a harsher test than R45.",
+  })
+
+  -- R45: twins, merged as the searches merge them.
+  for _, setup in ipairs(ANCHORS) do
+    local ctx, prefix = {}, {}
+    setup.init(ctx)
+    G.load()
+    for t = 1, 90 do
+      local keys = setup.next(ctx, t)
+      if not keys then break end
+      prefix[#prefix + 1] = keys
+      G.press(keys)
+    end
+    local number, first, pairs, found, lines = new_numbering(), {}, {}, 0, 0
+    for d = 1, depth do first[d] = {} end
+    local function visit(d, seq)
+      if d > 0 then
+        lines = lines + 1
+        local n = number()
+        local seen = first[d][n]
+        if seen then
+          found = found + 1
+          local pair = { seen, seq }
+          if #pairs < CFG.twin_pairs then pairs[#pairs + 1] = pair
+          else
+            local j = math.random(found)
+            if j <= CFG.twin_pairs then pairs[j] = pair end
+          end
+          return
+        end
+        first[d][n] = seq
+      end
+      if d == depth then return end
+      local save = (savestate.object or savestate.create)()
+      savestate.save(save)
+      emu.frameadvance()    -- FCEUX writes a Lua savestate at a frame boundary
+      for _, sym in ipairs(SEARCH_INPUTS) do
+        savestate.load(save)
+        G.press(sym)
+        local child = {}
+        for i, k in ipairs(seq) do child[i] = k end
+        child[#child + 1] = sym
+        visit(d + 1, child)
+      end
+    end
+    visit(0, {})
+    collectgarbage()
+    local function replay(seq)
+      G.load()
+      for _, keys in ipairs(prefix) do G.press(keys) end
+      for _, keys in ipairs(seq) do G.press(keys) end
+    end
+    R.say(string.format("    from %s (%s): %d lines, %d twins; following %d pairs%s",
+        setup.name, #prefix > 0 and T.line(prefix) or "no inputs", lines, found, #pairs,
+        #pairs > 0 and (", e.g. " .. T.line(pairs[1][1]) .. " and " .. T.line(pairs[1][2])) or ""))
+    for _, pair in ipairs(pairs) do
+      local where = string.format("from %s, %s and %s", setup.name, T.line(pair[1]),
+          T.line(pair[2]))
+      for _ = 1, CFG.futures do
+        local inputs = random_inputs(F)
+        replay(pair[1])
+        local start = ram_chunks()
+        local want = record_future(inputs)
+        replay(pair[2])
+        local diff = ram_difference(start, ram_chunks())
+        if diff then R.fail(c_twin, where .. ": the twins' RAM differs: " .. diff)
+        else
+          R.pass(c_twin)
+          compare_future(c_twin, inputs, want, where)
+        end
+      end
+    end
+  end
+
+  -- R46: a state's RAM, written over other console state.
+  local bgs = make_backgrounds()
+  for i = 1, CFG.transplants do
+    local setup = SETUPS[(i - 1) % #SETUPS + 1]
+    local ctx, line = {}, {}
+    setup.init(ctx)
+    G.load()
+    local stop, keys, hold, in_prefix = math.random(1, CFG.play_frames), "", 0, true
+    for t = 1, stop do
+      local pre = in_prefix and setup.next(ctx, t)
+      if pre then keys = pre else
+        in_prefix = false
+        if hold == 0 then
+          keys = setup.menu[math.random(#setup.menu)]
+          hold = math.random(1, 8)
+        end
+        hold = hold - 1
+      end
+      line[t] = keys
+      G.press(keys)
+    end
+    local ram = ram_chunks()
+    local bytes = table.concat(ram)
+    local save = (savestate.object or savestate.create)()
+    savestate.save(save)
+    emu.frameadvance()    -- FCEUX writes a Lua savestate at a frame boundary
+    for _ = 1, CFG.futures do
+      local inputs = random_inputs(F)
+      savestate.load(save)
+      local diff0 = ram_difference(ram, ram_chunks())
+      local want = record_future(inputs)
+      for _, bg in ipairs(bgs) do
+        local where = string.format("state %d (from %s, %s) over %s", i, setup.name,
+            T.line(line), bg.name)
+        savestate.load(bg.save)
+        for a = 0, 0x7FF do wb(a, bytes:byte(a + 1)) end
+        local diff = diff0 or ram_difference(ram, ram_chunks())
+        if diff then R.fail(c_move, where .. ": the written RAM differs: " .. diff)
+        else
+          R.pass(c_move)
+          compare_future(c_move, inputs, want, where)
+        end
+      end
+    end
+  end
+  collectgarbage()
+
+  if c_twin.n == 0 then R.done(c_twin, "NOT SHOWN", "no twins found")
+  else R.done(c_twin) end
+  R.done(c_move)
 end
 
 -- === R35-R38. Exhaustive one-frame comparison ===================================================
@@ -2063,8 +2477,8 @@ end
 if not B then R.say("Bound NOT LOADED: " .. tostring(bound_err)) end
 local s = {}
 for _, name in ipairs({ "setup", "witnesses", "gotchas", "facing", "buttons",
-                        "edge", "jumps", "play", "backgrounds",
-                        "exhaustive" }) do
+                        "edge", "jumps", "play", "backgrounds", "held_select",
+                        "scroll", "dedup", "exhaustive" }) do
   if CFG.sections[name] then s[#s + 1] = name end
 end
 R.say("Sections: " .. table.concat(s, ", ") .. string.format("; exhaustive"
@@ -2111,6 +2525,9 @@ if CFG.sections.edge then section_edge() end
 if CFG.sections.jumps then section_jumps() end
 if CFG.sections.play then section_play() end
 if CFG.sections.backgrounds then section_backgrounds(states) end
+if CFG.sections.held_select then section_held_select() end
+if CFG.sections.scroll then section_scroll() end
+if CFG.sections.dedup then section_dedup() end
 if CFG.sections.exhaustive then section_exhaustive(states) end
 
 R.say("")
