@@ -1,5 +1,5 @@
 SMB1 ROM validation for the acceleration bound
-Date: 2026-10-30 10:59
+Date: 2026-10-30 12:47
 Files tested (Adler-32 of each file's text, line endings ignored):
   d4e93bd8  C:\Users\Marc\fceux-2.6.6-win64\fceux-lua-experiments\10_ValidationTests\smb1_rom_validation.lua
   db130524  C:\Users\Marc\fceux-2.6.6-win64\fceux-lua-experiments\10_ValidationTests\smbmodel.lua
@@ -505,12 +505,12 @@ R42  bound3's facing rule and edge position hold in real play  [sampled]
       the bound's own RAM tests (already_turned, holds_no_burst,
       clear_of_left_edge) at every frame.
       Supports: use_facing_rule and use_edge_position, on the ROM.
-      ... 889 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
-      ... 1843 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
-      ... 2728 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
-      ... 3678 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
-      ... 4641 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
-      ... 5592 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
+      ... 961 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
+      ... 1920 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
+      ... 2878 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
+      ... 3856 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
+      ... 4828 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
+      ... 5810 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
       -> R29 PASS (480000 checks, 0 failed)
       -> R30 PASS (480000 checks, 0 failed)
       -> R31 PASS (480000 checks, 0 failed)  farthest right of the edge: 112 px; farthest x: 190; closest enemy: 156 px
@@ -621,73 +621,83 @@ R38  Every state and input case: a jump starts on the frame A is pressed  [exhau
       when A is newly pressed, and that frame already uses the air rules
       (R35 compares it with the model's air step); air frames stay in air.
       Supports: the model's jump timing (ProcJumping before X_Physics).
-      ... state 937 (937 of 64896, 1.4%), 127432 frames, mismatches 0/0/0/0, elapsed 0:01:00, about 1:08:15 to go
-      ... state 1896 (1896 of 64896, 2.9%), 257856 frames, mismatches 0/0/0/0, elapsed 0:02:00, about 1:06:27 to go
-      ... state 2865 (2865 of 64896, 4.4%), 389640 frames, mismatches 0/0/0/0, elapsed 0:03:00, about 1:04:57 to go
-      ... state 3837 (3837 of 64896, 5.9%), 521832 frames, mismatches 0/0/0/0, elapsed 0:04:00, about 1:03:39 to go
-      ... state 4758 (4758 of 64896, 7.3%), 647088 frames, mismatches 0/0/0/0, elapsed 0:05:00, about 1:03:11 to go
-      ... state 5718 (5718 of 64896, 8.8%), 777648 frames, mismatches 0/0/0/0, elapsed 0:06:00, about 1:02:05 to go
-      ... state 6660 (6660 of 64896, 10.3%), 905760 frames, mismatches 0/0/0/0, elapsed 0:07:00, about 1:01:12 to go
-      ... state 7610 (7610 of 64896, 11.7%), 1034960 frames, mismatches 0/0/0/0, elapsed 0:08:00, about 1:00:13 to go
-      ... state 8588 (8588 of 64896, 13.2%), 1167968 frames, mismatches 0/0/0/0, elapsed 0:09:00, about 0:59:00 to go
-      ... state 9574 (9574 of 64896, 14.8%), 1302064 frames, mismatches 0/0/0/0, elapsed 0:10:00, about 0:57:47 to go
-      ... state 10567 (10567 of 64896, 16.3%), 1437112 frames, mismatches 0/0/0/0, elapsed 0:11:00, about 0:56:33 to go
-      ... state 11549 (11549 of 64896, 17.8%), 1570664 frames, mismatches 0/0/0/0, elapsed 0:12:00, about 0:55:25 to go
-      ... state 12535 (12535 of 64896, 19.3%), 1704760 frames, mismatches 0/0/0/0, elapsed 0:13:00, about 0:54:18 to go
-      ... state 13508 (13508 of 64896, 20.8%), 1837088 frames, mismatches 0/0/0/0, elapsed 0:14:00, about 0:53:15 to go
-      ... state 14489 (14489 of 64896, 22.3%), 1970504 frames, mismatches 0/0/0/0, elapsed 0:15:00, about 0:52:11 to go
-      ... state 15447 (15447 of 64896, 23.8%), 2100792 frames, mismatches 0/0/0/0, elapsed 0:16:00, about 0:51:13 to go
-      ... state 16356 (16356 of 64896, 25.2%), 2224416 frames, mismatches 0/0/0/0, elapsed 0:17:00, about 0:50:27 to go
-      ... state 17276 (17276 of 64896, 26.6%), 2349536 frames, mismatches 0/0/0/0, elapsed 0:18:00, about 0:49:36 to go
-      ... state 18254 (18254 of 64896, 28.1%), 2482544 frames, mismatches 0/0/0/0, elapsed 0:19:00, about 0:48:32 to go
-      ... state 19205 (19205 of 64896, 29.6%), 2611880 frames, mismatches 0/0/0/0, elapsed 0:20:00, about 0:47:34 to go
-      ... state 20139 (20139 of 64896, 31.0%), 2738904 frames, mismatches 0/0/0/0, elapsed 0:21:00, about 0:46:40 to go
-      ... state 21016 (21016 of 64896, 32.4%), 2858176 frames, mismatches 0/0/0/0, elapsed 0:22:00, about 0:45:56 to go
-      ... state 21985 (21985 of 64896, 33.9%), 2989960 frames, mismatches 0/0/0/0, elapsed 0:23:00, about 0:44:53 to go
-      ... state 22952 (22952 of 64896, 35.4%), 3121472 frames, mismatches 0/0/0/0, elapsed 0:24:00, about 0:43:51 to go
-      ... state 23896 (23896 of 64896, 36.8%), 3249856 frames, mismatches 0/0/0/0, elapsed 0:25:00, about 0:42:53 to go
-      ... state 24872 (24872 of 64896, 38.3%), 3382592 frames, mismatches 0/0/0/0, elapsed 0:26:00, about 0:41:50 to go
-      ... state 25862 (25862 of 64896, 39.9%), 3517232 frames, mismatches 0/0/0/0, elapsed 0:27:00, about 0:40:45 to go
-      ... state 26852 (26852 of 64896, 41.4%), 3651872 frames, mismatches 0/0/0/0, elapsed 0:28:00, about 0:39:40 to go
-      ... state 27835 (27835 of 64896, 42.9%), 3785560 frames, mismatches 0/0/0/0, elapsed 0:29:00, about 0:38:36 to go
-      ... state 28812 (28812 of 64896, 44.4%), 3918432 frames, mismatches 0/0/0/0, elapsed 0:30:00, about 0:37:34 to go
-      ... state 29786 (29786 of 64896, 45.9%), 4050896 frames, mismatches 0/0/0/0, elapsed 0:31:00, about 0:36:32 to go
-      ... state 30737 (30737 of 64896, 47.4%), 4180232 frames, mismatches 0/0/0/0, elapsed 0:32:00, about 0:35:33 to go
-      ... state 31706 (31706 of 64896, 48.9%), 4312016 frames, mismatches 0/0/0/0, elapsed 0:33:00, about 0:34:32 to go
-      ... state 32678 (32678 of 64896, 50.4%), 4444208 frames, mismatches 0/0/0/0, elapsed 0:34:00, about 0:33:31 to go
-      ... state 33645 (33645 of 64896, 51.8%), 4575720 frames, mismatches 0/0/0/0, elapsed 0:35:00, about 0:32:30 to go
-      ... state 34639 (34639 of 64896, 53.4%), 4710904 frames, mismatches 0/0/0/0, elapsed 0:36:00, about 0:31:26 to go
-      ... state 35628 (35628 of 64896, 54.9%), 4845408 frames, mismatches 0/0/0/0, elapsed 0:37:00, about 0:30:23 to go
-      ... state 36622 (36622 of 64896, 56.4%), 4980592 frames, mismatches 0/0/0/0, elapsed 0:38:00, about 0:29:20 to go
-      ... state 37609 (37609 of 64896, 58.0%), 5114824 frames, mismatches 0/0/0/0, elapsed 0:39:00, about 0:28:17 to go
-      ... state 38569 (38569 of 64896, 59.4%), 5245384 frames, mismatches 0/0/0/0, elapsed 0:40:00, about 0:27:18 to go
-      ... state 39519 (39519 of 64896, 60.9%), 5374584 frames, mismatches 0/0/0/0, elapsed 0:41:00, about 0:26:19 to go
-      ... state 40482 (40482 of 64896, 62.4%), 5505552 frames, mismatches 0/0/0/0, elapsed 0:42:00, about 0:25:19 to go
-      ... state 41443 (41443 of 64896, 63.9%), 5636248 frames, mismatches 0/0/0/0, elapsed 0:43:00, about 0:24:20 to go
-      ... state 42428 (42428 of 64896, 65.4%), 5770208 frames, mismatches 0/0/0/0, elapsed 0:44:00, about 0:23:18 to go
-      ... state 43395 (43395 of 64896, 66.9%), 5901720 frames, mismatches 0/0/0/0, elapsed 0:45:00, about 0:22:17 to go
-      ... state 44384 (44384 of 64896, 68.4%), 6036224 frames, mismatches 0/0/0/0, elapsed 0:46:00, about 0:21:15 to go
-      ... state 45348 (45348 of 64896, 69.9%), 6167328 frames, mismatches 0/0/0/0, elapsed 0:47:00, about 0:20:15 to go
-      ... state 46304 (46304 of 64896, 71.4%), 6297344 frames, mismatches 0/0/0/0, elapsed 0:48:00, about 0:19:16 to go
-      ... state 47278 (47278 of 64896, 72.9%), 6429808 frames, mismatches 0/0/0/0, elapsed 0:49:00, about 0:18:15 to go
-      ... state 48234 (48234 of 64896, 74.3%), 6559824 frames, mismatches 0/0/0/0, elapsed 0:50:00, about 0:17:16 to go
-      ... state 49169 (49169 of 64896, 75.8%), 6686984 frames, mismatches 0/0/0/0, elapsed 0:51:00, about 0:16:18 to go
-      ... state 50094 (50094 of 64896, 77.2%), 6812784 frames, mismatches 0/0/0/0, elapsed 0:52:00, about 0:15:21 to go
-      ... state 51026 (51026 of 64896, 78.6%), 6939536 frames, mismatches 0/0/0/0, elapsed 0:53:00, about 0:14:24 to go
-      ... state 52003 (52003 of 64896, 80.1%), 7072408 frames, mismatches 0/0/0/0, elapsed 0:54:00, about 0:13:23 to go
-      ... state 52992 (52992 of 64896, 81.7%), 7206912 frames, mismatches 0/0/0/0, elapsed 0:55:00, about 0:12:21 to go
-      ... state 53986 (53986 of 64896, 83.2%), 7342096 frames, mismatches 0/0/0/0, elapsed 0:56:00, about 0:11:19 to go
-      ... state 54981 (54981 of 64896, 84.7%), 7477416 frames, mismatches 0/0/0/0, elapsed 0:57:00, about 0:10:16 to go
-      ... state 55961 (55961 of 64896, 86.2%), 7610696 frames, mismatches 0/0/0/0, elapsed 0:58:00, about 0:09:15 to go
-      ... state 56930 (56930 of 64896, 87.7%), 7742480 frames, mismatches 0/0/0/0, elapsed 0:59:00, about 0:08:15 to go
-      ... state 57865 (57865 of 64896, 89.2%), 7869640 frames, mismatches 0/0/0/0, elapsed 1:00:00, about 0:07:17 to go
-      ... state 58790 (58790 of 64896, 90.6%), 7995440 frames, mismatches 0/0/0/0, elapsed 1:01:00, about 0:06:20 to go
-      ... state 59764 (59764 of 64896, 92.1%), 8127904 frames, mismatches 0/0/0/0, elapsed 1:02:00, about 0:05:19 to go
-      ... state 60725 (60725 of 64896, 93.6%), 8258600 frames, mismatches 0/0/0/0, elapsed 1:03:00, about 0:04:19 to go
-      ... state 61601 (61601 of 64896, 94.9%), 8377736 frames, mismatches 0/0/0/0, elapsed 1:04:00, about 0:03:25 to go
-      ... state 62606 (62606 of 64896, 96.5%), 8514416 frames, mismatches 0/0/0/0, elapsed 1:05:00, about 0:02:22 to go
-      ... state 63629 (63629 of 64896, 98.0%), 8653544 frames, mismatches 0/0/0/0, elapsed 1:06:00, about 0:01:18 to go
-      ... state 64651 (64651 of 64896, 99.6%), 8792536 frames, mismatches 0/0/0/0, elapsed 1:07:00, about 0:00:15 to go
+      ... state 867 (867 of 64896, 1.3%), 117912 frames, mismatches 0/0/0/0, elapsed 0:01:00, about 1:13:51 to go
+      ... state 1752 (1752 of 64896, 2.7%), 238272 frames, mismatches 0/0/0/0, elapsed 0:02:00, about 1:12:04 to go
+      ... state 2638 (2638 of 64896, 4.1%), 358768 frames, mismatches 0/0/0/0, elapsed 0:03:00, about 1:10:48 to go
+      ... state 3521 (3521 of 64896, 5.4%), 478856 frames, mismatches 0/0/0/0, elapsed 0:04:00, about 1:09:43 to go
+      ... state 4407 (4407 of 64896, 6.8%), 599352 frames, mismatches 0/0/0/0, elapsed 0:05:00, about 1:08:37 to go
+      ... state 5289 (5289 of 64896, 8.1%), 719304 frames, mismatches 0/0/0/0, elapsed 0:06:00, about 1:07:37 to go
+      ... state 6162 (6162 of 64896, 9.5%), 838032 frames, mismatches 0/0/0/0, elapsed 0:07:00, about 1:06:43 to go
+      ... state 6974 (6974 of 64896, 10.7%), 948464 frames, mismatches 0/0/0/0, elapsed 0:08:00, about 1:06:26 to go
+      ... state 7807 (7807 of 64896, 12.0%), 1061752 frames, mismatches 0/0/0/0, elapsed 0:09:00, about 1:05:48 to go
+      ... state 8601 (8601 of 64896, 13.3%), 1169736 frames, mismatches 0/0/0/0, elapsed 0:10:00, about 1:05:27 to go
+      ... state 9359 (9359 of 64896, 14.4%), 1272824 frames, mismatches 0/0/0/0, elapsed 0:11:00, about 1:05:16 to go
+      ... state 10093 (10093 of 64896, 15.6%), 1372648 frames, mismatches 0/0/0/0, elapsed 0:12:00, about 1:05:09 to go
+      ... state 10823 (10823 of 64896, 16.7%), 1471928 frames, mismatches 0/0/0/0, elapsed 0:13:00, about 1:04:56 to go
+      ... state 11540 (11540 of 64896, 17.8%), 1569440 frames, mismatches 0/0/0/0, elapsed 0:14:00, about 1:04:43 to go
+      ... state 12260 (12260 of 64896, 18.9%), 1667360 frames, mismatches 0/0/0/0, elapsed 0:15:00, about 1:04:23 to go
+      ... state 12961 (12961 of 64896, 20.0%), 1762696 frames, mismatches 0/0/0/0, elapsed 0:16:00, about 1:04:06 to go
+      ... state 13691 (13691 of 64896, 21.1%), 1861976 frames, mismatches 0/0/0/0, elapsed 0:17:00, about 1:03:34 to go
+      ... state 14428 (14428 of 64896, 22.2%), 1962208 frames, mismatches 0/0/0/0, elapsed 0:18:00, about 1:02:57 to go
+      ... state 15161 (15161 of 64896, 23.4%), 2061896 frames, mismatches 0/0/0/0, elapsed 0:19:00, about 1:02:19 to go
+      ... state 15893 (15893 of 64896, 24.5%), 2161448 frames, mismatches 0/0/0/0, elapsed 0:20:00, about 1:01:39 to go
+      ... state 16625 (16625 of 64896, 25.6%), 2261000 frames, mismatches 0/0/0/0, elapsed 0:21:00, about 1:00:58 to go
+      ... state 17360 (17360 of 64896, 26.8%), 2360960 frames, mismatches 0/0/0/0, elapsed 0:22:00, about 1:00:14 to go
+      ... state 18088 (18088 of 64896, 27.9%), 2459968 frames, mismatches 0/0/0/0, elapsed 0:23:00, about 0:59:31 to go
+      ... state 18816 (18816 of 64896, 29.0%), 2558976 frames, mismatches 0/0/0/0, elapsed 0:24:00, about 0:58:46 to go
+      ... state 19583 (19583 of 64896, 30.2%), 2663288 frames, mismatches 0/0/0/0, elapsed 0:25:00, about 0:57:50 to go
+      ... state 20434 (20434 of 64896, 31.5%), 2779024 frames, mismatches 0/0/0/0, elapsed 0:26:00, about 0:56:34 to go
+      ... state 21284 (21284 of 64896, 32.8%), 2894624 frames, mismatches 0/0/0/0, elapsed 0:27:00, about 0:55:19 to go
+      ... state 22135 (22135 of 64896, 34.1%), 3010360 frames, mismatches 0/0/0/0, elapsed 0:28:00, about 0:54:05 to go
+      ... state 22985 (22985 of 64896, 35.4%), 3125960 frames, mismatches 0/0/0/0, elapsed 0:29:00, about 0:52:52 to go
+      ... state 23830 (23830 of 64896, 36.7%), 3240880 frames, mismatches 0/0/0/0, elapsed 0:30:00, about 0:51:41 to go
+      ... state 24667 (24667 of 64896, 38.0%), 3354712 frames, mismatches 0/0/0/0, elapsed 0:31:00, about 0:50:33 to go
+      ... state 25518 (25518 of 64896, 39.3%), 3470448 frames, mismatches 0/0/0/0, elapsed 0:32:00, about 0:49:22 to go
+      ... state 26369 (26369 of 64896, 40.6%), 3586184 frames, mismatches 0/0/0/0, elapsed 0:33:00, about 0:48:12 to go
+      ... state 27222 (27222 of 64896, 41.9%), 3702192 frames, mismatches 0/0/0/0, elapsed 0:34:00, about 0:47:03 to go
+      ... state 28074 (28074 of 64896, 43.3%), 3818064 frames, mismatches 0/0/0/0, elapsed 0:35:00, about 0:45:54 to go
+      ... state 28926 (28926 of 64896, 44.6%), 3933936 frames, mismatches 0/0/0/0, elapsed 0:36:00, about 0:44:45 to go
+      ... state 29778 (29778 of 64896, 45.9%), 4049808 frames, mismatches 0/0/0/0, elapsed 0:37:00, about 0:43:38 to go
+      ... state 30630 (30630 of 64896, 47.2%), 4165680 frames, mismatches 0/0/0/0, elapsed 0:38:00, about 0:42:30 to go
+      ... state 31481 (31481 of 64896, 48.5%), 4281416 frames, mismatches 0/0/0/0, elapsed 0:39:00, about 0:41:23 to go
+      ... state 32333 (32333 of 64896, 49.8%), 4397288 frames, mismatches 0/0/0/0, elapsed 0:40:00, about 0:40:17 to go
+      ... state 33184 (33184 of 64896, 51.1%), 4513024 frames, mismatches 0/0/0/0, elapsed 0:41:00, about 0:39:10 to go
+      ... state 34037 (34037 of 64896, 52.4%), 4629032 frames, mismatches 0/0/0/0, elapsed 0:42:00, about 0:38:04 to go
+      ... state 34890 (34890 of 64896, 53.8%), 4745040 frames, mismatches 0/0/0/0, elapsed 0:43:00, about 0:36:58 to go
+      ... state 35736 (35736 of 64896, 55.1%), 4860096 frames, mismatches 0/0/0/0, elapsed 0:44:00, about 0:35:54 to go
+      ... state 36585 (36585 of 64896, 56.4%), 4975560 frames, mismatches 0/0/0/0, elapsed 0:45:00, about 0:34:49 to go
+      ... state 37423 (37423 of 64896, 57.7%), 5089528 frames, mismatches 0/0/0/0, elapsed 0:46:00, about 0:33:46 to go
+      ... state 38274 (38274 of 64896, 59.0%), 5205264 frames, mismatches 0/0/0/0, elapsed 0:47:00, about 0:32:41 to go
+      ... state 39127 (39127 of 64896, 60.3%), 5321272 frames, mismatches 0/0/0/0, elapsed 0:48:00, about 0:31:36 to go
+      ... state 39984 (39984 of 64896, 61.6%), 5437824 frames, mismatches 0/0/0/0, elapsed 0:49:00, about 0:30:31 to go
+      ... state 40852 (40852 of 64896, 62.9%), 5555872 frames, mismatches 0/0/0/0, elapsed 0:50:00, about 0:29:25 to go
+      ... state 41727 (41727 of 64896, 64.3%), 5674872 frames, mismatches 0/0/0/0, elapsed 0:51:00, about 0:28:19 to go
+      ... state 42608 (42608 of 64896, 65.7%), 5794688 frames, mismatches 0/0/0/0, elapsed 0:52:00, about 0:27:12 to go
+      ... state 43489 (43489 of 64896, 67.0%), 5914504 frames, mismatches 0/0/0/0, elapsed 0:53:00, about 0:26:05 to go
+      ... state 44374 (44374 of 64896, 68.4%), 6034864 frames, mismatches 0/0/0/0, elapsed 0:54:00, about 0:24:58 to go
+      ... state 45256 (45256 of 64896, 69.7%), 6154816 frames, mismatches 0/0/0/0, elapsed 0:55:00, about 0:23:52 to go
+      ... state 46141 (46141 of 64896, 71.1%), 6275176 frames, mismatches 0/0/0/0, elapsed 0:56:00, about 0:22:45 to go
+      ... state 47027 (47027 of 64896, 72.5%), 6395672 frames, mismatches 0/0/0/0, elapsed 0:57:00, about 0:21:39 to go
+      ... state 47913 (47913 of 64896, 73.8%), 6516168 frames, mismatches 0/0/0/0, elapsed 0:58:00, about 0:20:33 to go
+      ... state 48799 (48799 of 64896, 75.2%), 6636664 frames, mismatches 0/0/0/0, elapsed 0:59:00, about 0:19:27 to go
+      ... state 49686 (49686 of 64896, 76.6%), 6757296 frames, mismatches 0/0/0/0, elapsed 1:00:00, about 0:18:22 to go
+      ... state 50559 (50559 of 64896, 77.9%), 6876024 frames, mismatches 0/0/0/0, elapsed 1:01:00, about 0:17:17 to go
+      ... state 51445 (51445 of 64896, 79.3%), 6996520 frames, mismatches 0/0/0/0, elapsed 1:02:00, about 0:16:12 to go
+      ... state 52331 (52331 of 64896, 80.6%), 7117016 frames, mismatches 0/0/0/0, elapsed 1:03:00, about 0:15:07 to go
+      ... state 53217 (53217 of 64896, 82.0%), 7237512 frames, mismatches 0/0/0/0, elapsed 1:04:00, about 0:14:02 to go
+      ... state 54103 (54103 of 64896, 83.4%), 7358008 frames, mismatches 0/0/0/0, elapsed 1:05:00, about 0:12:58 to go
+      ... state 54988 (54988 of 64896, 84.7%), 7478368 frames, mismatches 0/0/0/0, elapsed 1:06:00, about 0:11:53 to go
+      ... state 55874 (55874 of 64896, 86.1%), 7598864 frames, mismatches 0/0/0/0, elapsed 1:07:00, about 0:10:49 to go
+      ... state 56761 (56761 of 64896, 87.5%), 7719496 frames, mismatches 0/0/0/0, elapsed 1:08:00, about 0:09:44 to go
+      ... state 57648 (57648 of 64896, 88.8%), 7840128 frames, mismatches 0/0/0/0, elapsed 1:09:00, about 0:08:40 to go
+      ... state 58534 (58534 of 64896, 90.2%), 7960624 frames, mismatches 0/0/0/0, elapsed 1:10:00, about 0:07:36 to go
+      ... state 59421 (59421 of 64896, 91.6%), 8081256 frames, mismatches 0/0/0/0, elapsed 1:11:00, about 0:06:32 to go
+      ... state 60307 (60307 of 64896, 92.9%), 8201752 frames, mismatches 0/0/0/0, elapsed 1:12:00, about 0:05:28 to go
+      ... state 61195 (61195 of 64896, 94.3%), 8322520 frames, mismatches 0/0/0/0, elapsed 1:13:00, about 0:04:24 to go
+      ... state 62081 (62081 of 64896, 95.7%), 8443016 frames, mismatches 0/0/0/0, elapsed 1:14:00, about 0:03:21 to go
+      ... state 62968 (62968 of 64896, 97.0%), 8563648 frames, mismatches 0/0/0/0, elapsed 1:15:00, about 0:02:17 to go
+      ... state 63841 (63841 of 64896, 98.4%), 8682376 frames, mismatches 0/0/0/0, elapsed 1:16:00, about 0:01:15 to go
+      ... state 64728 (64728 of 64896, 99.7%), 8803008 frames, mismatches 0/0/0/0, elapsed 1:17:00, about 0:00:11 to go
       -> R35 PASS (8825856 checks, 0 failed)  states 1-64896 every 1
       -> R36 PASS (8825856 checks, 0 failed)
       -> R37 PASS (8825856 checks, 0 failed)
