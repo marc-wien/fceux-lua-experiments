@@ -28,7 +28,7 @@ what it tests, how, and what it supports, then PASS or FAIL, with the first mism
 |---|---|
 | `smbmodel.lua` | The model: one frame of horizontal physics, from SMBDIS.ASM |
 | `bound_harness.lua` | Loads `bound1.lua`, `bound2.lua` or `bound3.lua`; gives the per-frame envelope of its ramp |
-| `smb1_rom_validation.lua` | The FCEUX suite, claims R1-R42 |
+| `smb1_rom_validation.lua` | The FCEUX suite, claims R1-R46 |
 | `smb1_model_validation.lua` | The model check, claims M1-M12 |
 | `OPEN_CLAIMS.md` | Claims not yet confirmed in the ROM, and ideas for tightening |
 
@@ -36,7 +36,8 @@ what it tests, how, and what it supports, then PASS or FAIL, with the first mism
 - *ROM suite:* FCEUX 2.x with the NTSC ROM, and "Allow Left+Right / Up+Down" ticked. Power on, then
   run the script.
   - Everything except R35-R38 should take minutes. R34 runs about 137,000 single frames; set
-    `background_stride` higher for a quicker pass.
+    `background_stride` higher for a quicker pass. R44 and R45-R46 each run a few hundred
+    thousand (`scroll_reach`, `twin_pairs`, `transplants`).
   - R35-R38 run about 8.8 million single frames. Expect hours; the suite prints an estimate. Set
     `exhaustive_stride = 50` for a quick pass first.
   - After a change to the bound but not the model, only the setup, witnesses, facing and play
@@ -191,6 +192,24 @@ rules out.
 - **R34** R35-R38's comparison over three other backgrounds (other frame counter, timers, random
   numbers and screen position) and random subpixels away from the edge.
 
+**Held Select, scrolling, and what the future depends on** (R43 sequence, R44 sweep, R45-R46
+sampled)
+- **R43** A held Select counts only on its first frame: after that, SavedJoypadBits drops it
+  (ReadPortBits, with Select also in JoypadBitMask), so the skid reset doesn't see it. Pressed
+  again, it counts. This is the input rule R29 gives the model.
+- **R44** One frame at a time, Mario 0-130 px right of the left edge, every speed byte, on the
+  ground and in the air, over the start and a scrolled screen: the edge never moves left; it moves
+  only when Mario was 80 px or more clear, by no more than he moved, and leaves him 64 px or more
+  clear. It does scroll from 80 px. With R27 and R37, every one-frame fact behind edge position is
+  swept, not just sampled.
+- **R45** Lines that reach the same frame with the same RAM by different inputs, merged as the
+  searches' dedup merges them, have the same future: from three anchors, every line of up to 3
+  frames over the searches' 36 inputs, then random continuations of 60 frames from both twins, with
+  all 2 KB compared every frame.
+- **R46** A state's future depends only on its RAM: its 2 KB written over three other backgrounds,
+  where the console's state outside RAM (the PPU's screen contents, among others) differs, plays
+  out exactly as the state itself does.
+
 **Every model state and input case, one frame each** (exhaustive: 64,896 states, 136 frames each:
 68 input cases, each at x 96 and on the edge)
 - **R35** The ROM's next speed, facing, moving direction, $0700 and latch equal the model's.
@@ -241,11 +260,17 @@ rules out.
 **Edge position** (`use_edge_position`) goes through step 3 for Mario's moves only, since the model
 has no positions: M7 and M8 check that, clear of the left edge, the sum of his moves stays within
 the ramp without the 15/16 px allowance. That the edge can't add to those moves rests on R27 and
-R30 (the clamp puts his pixel on the edge and keeps a subpixel of at most 15/16 px), R31 (the edge
-never moves left, and moves right only while he is clear of it: ScrollHandler scrolls only from
-screen x 80, and R31 checks 64 or more) and R37 (he moves by the speed byte). R41 checks that
-inequality directly, and R42 the bound built on it, both along sampled play. None of these facts
-depends on where the edge is.
+R30 (the clamp puts his pixel on the edge and keeps a subpixel of at most 15/16 px), R44 and R31
+(the edge never moves left, and moves right only while he is 80 px or more clear of it, leaving him
+64 px or more clear: R44 sweeps it one frame at a time, R31 samples it in play) and R37 (he moves
+by the speed byte). From these one-frame facts the inequality is argued by induction over frames:
+a clamp puts him at most 15/16 px past an edge that either hasn't moved since the earlier frame or,
+when it last moved, was left 64 px or more behind him. R41 checks the inequality directly, and R42
+the bound built on it, both along sampled play. None of these facts depends on where the edge is.
+
+**The searches' dedup** treats two nodes with the same frame and the same 2 KB of RAM as one. R45
+checks that on the merges dedup makes, and R46 that RAM alone decides the future, with the rest of
+the console's state changed on purpose. Both sample; neither is exhaustive.
 
 **Tightness.**
 - In the model, the bound is reached exactly. The speed-only bound's closest margin is 0 for speed,
@@ -263,8 +288,8 @@ depends on where the edge is.
   frame before, the start's background and the subpixel at 0. R26 samples all 128 combinations and
   every timer value; R27 covers every subpixel at the edge; R34 samples other backgrounds and
   subpixels; R29 covers real play.
-- **R29-R33 and R41-R42 sample lines rather than enumerate them.** The exhaustive argument is the
-  chain above.
+- **R29-R33, R41-R42 and R45-R46 sample lines rather than enumerate them.** The exhaustive argument
+  is the chain above.
 - **Positions are not modeled.** The distance argument relies on the edge facts (see Edge position,
   above): the edge never carries Mario past where his own moves, plus one 15/16 px clamp, could
   take him. R41 checks that directly, but only along sampled play.
@@ -304,6 +329,12 @@ these to `bound3.lua` with its options off.
 - **Reference (M11):** the farthest the model allows from the start is 71.8125 px in 45 frames, so
   x 111.8125.
 
-**ROM suite:** not yet run on the ROM. Its log will be the record.
+**ROM suite, 2026-10-29: all claims R1-R42 hold** (`Logs/smb1_rom_validation_log.txt`), with
+R35-R38 over every state in the model's set (`exhaustive_stride = 1`: 8,825,856 frames, none
+failing any of the four) and R29-R33, R41-R42 over 6,000 runs. R29 passed once the model's inputs
+dropped a held Select, the rule R43 now shows directly. R43-R46 are newer and not yet run.
+
+**Model check, 2026-10-29:** all claims hold, as on 2026-10-27
+(`Logs/smb1_model_validation_log.txt`).
 
 Open and untested claims are listed in `OPEN_CLAIMS.md`.
