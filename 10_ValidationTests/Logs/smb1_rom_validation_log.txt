@@ -1,5 +1,5 @@
 SMB1 ROM validation for the acceleration bound
-Date: 2026-10-29 21:02
+Date: 2026-10-30 10:30
 Files tested (Adler-32 of each file's text, line endings ignored):
   d5db3c0c  C:\Users\Marc\fceux-2.6.6-win64\fceux-lua-experiments\10_ValidationTests\smb1_rom_validation.lua
   db130524  C:\Users\Marc\fceux-2.6.6-win64\fceux-lua-experiments\10_ValidationTests\smbmodel.lua
@@ -505,13 +505,12 @@ R42  bound3's facing rule and edge position hold in real play  [sampled]
       the bound's own RAM tests (already_turned, holds_no_burst,
       clear_of_left_edge) at every frame.
       Supports: use_facing_rule and use_edge_position, on the ROM.
-      ... 718 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
-      ... 1401 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
-      ... 2094 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
-      ... 2798 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
-      ... 3692 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
-      ... 4610 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
-      ... 5548 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
+      ... 730 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
+      ... 1535 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
+      ... 2378 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
+      ... 3257 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
+      ... 4178 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
+      ... 5110 of 6000 runs; mismatches so far: lockstep 0, set 0, scope 0, bound 0
       -> R29 PASS (480000 checks, 0 failed)
       -> R30 PASS (480000 checks, 0 failed)
       -> R31 PASS (480000 checks, 0 failed)  farthest right of the edge: 112 px; farthest x: 190; closest enemy: 156 px
@@ -622,7 +621,7 @@ R38  Every state and input case: a jump starts on the frame A is pressed  [exhau
       when A is newly pressed, and that frame already uses the air rules
       (R35 compares it with the model's air step); air frames stay in air.
       Supports: the model's jump timing (ProcJumping before X_Physics).
-      ... state 38001 (761 of 1298, 58.6%), 103496 frames, mismatches 0/0/0/0, elapsed 0:01:00, about 0:00:42 to go
+      ... state 36851 (738 of 1298, 56.9%), 100368 frames, mismatches 0/0/0/0, elapsed 0:01:00, about 0:00:45 to go
       -> R35 PASS (176528 checks, 0 failed)  states 1-64896 every 50
       -> R36 PASS (176528 checks, 0 failed)
       -> R37 PASS (176528 checks, 0 failed)
