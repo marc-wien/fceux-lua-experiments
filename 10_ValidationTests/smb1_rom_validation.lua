@@ -46,7 +46,7 @@ local CFG = {
     exhaustive = true,    -- R35-R38  every model state, every input case
   },
   background_stride = 97, -- R34 checks every 97th state (about 670)
-  exhaustive_stride = 50,  -- 1: every state; 50: a quick pass
+  exhaustive_stride = 1,  -- 1: every state; 50: a quick pass
   exhaustive_first = 1,   -- to resume a stopped run, start at this state
   exhaustive_last = nil,  -- nil: through the last state
   button_states = 300,    -- random states, each with all 128 combinations
